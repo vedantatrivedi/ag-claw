@@ -104,13 +104,20 @@ def test_guided_party_workflow_runs_full_flow_without_browser_search() -> None:
         "shopping_agent.app.agents.browser_search.BrowserSearchAgent.search_multiple"
     ) as search_mock:
         questions = workflow.generate_preference_questions(REQUEST)
-        result = workflow.run(
-            user_request=REQUEST,
+        preauth_result = workflow.create_preauth(
             preferences_answers=ANSWERS,
             budget_inr=15000.0,
         )
+        result = workflow.complete_after_authorization(
+            user_request=REQUEST,
+            preferences_answers=ANSWERS,
+            budget_inr=15000.0,
+            preauth=preauth_result["preauth"],
+        )
 
     assert questions == QUESTIONS
+    assert preauth_result["success"] is True
+    assert preauth_result["preauth"]["redirect_url"] == "https://checkout.example.com/ord_123"
     assert result["success"] is True
     assert result["preferences_answers"] == ANSWERS
     assert result["budget_inr"] == 15000.0
@@ -143,8 +150,7 @@ def test_guided_party_workflow_returns_preauth_failure_without_planning() -> Non
         "shopping_agent.app.workflows.guided_party_workflow.create_budget_preauth",
         side_effect=RuntimeError("authorization timed out"),
     ), mock.patch.object(planner, "plan") as planner_mock:
-        result = workflow.run(
-            user_request=REQUEST,
+        result = workflow.create_preauth(
             preferences_answers=ANSWERS,
             budget_inr=15000.0,
         )
@@ -152,6 +158,36 @@ def test_guided_party_workflow_returns_preauth_failure_without_planning() -> Non
     assert result["success"] is False
     assert result["stage"] == "preauth"
     assert "authorization timed out" in result["error"]
+    planner_mock.assert_not_called()
+
+
+def test_guided_party_workflow_returns_authorization_failure_without_planning() -> None:
+    planner = StubPlanner(_planner_success_response())
+    workflow = GuidedPartyWorkflow(
+        planner=planner,
+        question_agent=StubQuestionAgent(QUESTIONS),
+    )
+
+    with mock.patch(
+        "shopping_agent.app.workflows.guided_party_workflow.get_preauth_status",
+        side_effect=RuntimeError("preauth not authorized"),
+    ), mock.patch.object(planner, "plan") as planner_mock:
+        result = workflow.complete_after_authorization(
+            user_request=REQUEST,
+            preferences_answers=ANSWERS,
+            budget_inr=15000.0,
+            preauth={
+                "success": True,
+                "order_id": "ord_123",
+                "status": "CREATED",
+                "redirect_url": "https://checkout.example.com/ord_123",
+                "budget_paisa": 1500000,
+            },
+        )
+
+    assert result["success"] is False
+    assert result["stage"] == "authorization"
+    assert "preauth not authorized" in result["error"]
     planner_mock.assert_not_called()
 
 

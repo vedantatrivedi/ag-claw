@@ -158,6 +158,36 @@ class ShoppingOrchestrator:
         """Return model-generated preference questions for the guided flow."""
         return self.guided_party_workflow.generate_preference_questions(user_request)
 
+    def create_guided_party_preauth(
+        self,
+        *,
+        preferences_answers: dict,
+        budget_inr: float,
+    ) -> Dict[str, Any]:
+        """Create the guided-party preauth and return the checkout handoff details."""
+        return self.guided_party_workflow.create_preauth(
+            preferences_answers=preferences_answers,
+            budget_inr=budget_inr,
+        )
+
+    def complete_guided_party_after_authorization(
+        self,
+        *,
+        user_request: str,
+        preferences_answers: dict,
+        budget_inr: float,
+        preauth: dict,
+        apply_postprocessing: bool = True,
+    ) -> Dict[str, Any]:
+        """Wait for authorization and finish the guided-party flow."""
+        return self.guided_party_workflow.complete_after_authorization(
+            user_request=user_request,
+            preferences_answers=preferences_answers,
+            budget_inr=budget_inr,
+            preauth=preauth,
+            apply_postprocessing=apply_postprocessing,
+        )
+
     def get_agent_info(self) -> Dict[str, Any]:
         """
         Get information about all agents.

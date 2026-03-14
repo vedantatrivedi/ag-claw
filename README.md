@@ -20,6 +20,7 @@ This system uses multiple AI agents to help users shop:
 - ✅ Rich CLI interface with examples
 - ✅ Production-ready architecture
 - ✅ Comprehensive test suite
+- ✅ Pine Labs / Plural payment tools for preauth and later capture
 
 ### Search Methods
 
@@ -70,6 +71,7 @@ cp .env.example .env
 # Edit .env and add:
 # - OPENAI_API_KEY (required)
 # - SERPAPI_KEY (required - get free key at https://serpapi.com/users/sign_up)
+# - Pine Labs / Plural credentials (optional, required only for payment tools)
 ```
 
 4. Install SerpAPI package:
@@ -113,6 +115,51 @@ Open HTML gallery with all product images:
 ```bash
 python3 view_images.py "cricket helmet youth"
 ```
+
+## Pine Labs agent tools
+
+The repo now includes exportable Pine Labs / Plural tools in
+`shopping_agent.app.tools.pinelabs` for the shopping flow:
+
+1. `create_budget_preauth`
+2. `get_preauth_status`
+3. `capture_preauth`
+4. `cancel_preauth`
+
+These are also compatible with OpenAI's Agents SDK via `get_agents_sdk_tools()`.
+
+Example:
+
+```python
+from agents import Agent
+from shopping_agent import get_agents_sdk_tools
+
+payment_agent = Agent(
+    name="payment-agent",
+    instructions=(
+        "Use create_budget_preauth before curation, wait for AUTHORIZED status, "
+        "and only use capture_preauth after the user explicitly approves the final cart."
+    ),
+    tools=get_agents_sdk_tools(),
+)
+```
+
+Direct function usage without an agent:
+
+```python
+from shopping_agent import create_budget_preauth, capture_preauth
+
+preauth = create_budget_preauth(budget_paisa=150000)
+order_id = preauth["order_id"]
+
+# ... curate products, get user confirmation ...
+
+capture = capture_preauth(order_id=order_id, capture_amount_paisa=132500)
+```
+
+Webhook is not required. Polling support is built in through `get_preauth_status(..., wait_for_status="AUTHORIZED")`
+and `capture_preauth(..., wait_for_authorized=True)`. A webhook endpoint is still useful for faster event delivery,
+but the integration is designed to keep working if webhook delivery is delayed or fails.
 
 ### CLI Options
 

@@ -123,8 +123,6 @@ class PineLabsSettings:
     def base_url(self) -> str:
         return (
             "https://pluraluat.v2.pinepg.in"
-            if self.environment == "uat"
-            else "https://api.pluralpay.in"
         )
 
 

@@ -319,15 +319,23 @@ class PineLabsClient:
         poll_interval_seconds: Optional[float] = None,
         fail_on_terminal_status: bool = True,
     ) -> Dict[str, Any]:
+        import logging
+        _logger = logging.getLogger(__name__)
+
         timeout = timeout_seconds or self.settings.timeout_seconds
         interval = poll_interval_seconds or self.settings.poll_interval_seconds
         deadline = time.monotonic() + timeout
         last_response: Optional[Dict[str, Any]] = None
+        poll_count = 0
+        t_start = time.monotonic()
 
         while time.monotonic() < deadline:
+            poll_count += 1
             last_response = self.get_order(order_id)
             current_status = self.extract_status(last_response)
+            _logger.info("[perf] Pine Labs poll #%d — status=%s (%.1fs elapsed)", poll_count, current_status, time.monotonic() - t_start)
             if current_status == target_status:
+                _logger.info("[perf] Pine Labs reached '%s' after %d polls in %.1fs", target_status, poll_count, time.monotonic() - t_start)
                 return last_response
             if fail_on_terminal_status and current_status in self.TERMINAL_STATUSES:
                 raise PineLabsError(

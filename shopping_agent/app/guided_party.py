@@ -5,11 +5,14 @@ Helpers for the guided party-planning flow.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
 from typing import Dict, List, Optional
 from urllib.parse import quote
+
+perf_logger = logging.getLogger(__name__)
 
 from openai import APIConnectionError, OpenAI
 
@@ -170,7 +173,10 @@ def _raw_to_search_result(r: dict, source: str) -> SearchResult:
     )
 
 
-def get_curated_listing_results(plan: ShoppingPlan) -> tuple[List[SearchResults], str]:
+def get_curated_listing_results(
+    plan: ShoppingPlan,
+    manager: "BrowserbaseManager | None" = None,
+) -> tuple[List[SearchResults], str]:
     """For each plan item, search Amazon via Browserbase and return top 1 result.
 
     All item searches run in parallel for speed.
@@ -181,24 +187,29 @@ def get_curated_listing_results(plan: ShoppingPlan) -> tuple[List[SearchResults]
 
     logger = logging.getLogger(__name__)
 
-    try:
-        from shopping_agent.app.tools.browserbase import BrowserbaseManager
-        manager = BrowserbaseManager()
-    except Exception:
-        logger.warning("[curate] Browserbase unavailable, falling back to placeholders")
-        return build_placeholder_listing_results(plan), "placeholder"
+    if manager is None:
+        try:
+            from shopping_agent.app.tools.browserbase import BrowserbaseManager
+            manager = BrowserbaseManager()
+        except Exception:
+            logger.warning("[curate] Browserbase unavailable, falling back to placeholders")
+            return build_placeholder_listing_results(plan), "placeholder"
 
     items = plan.items
 
     def _search_amazon_item(idx: int, query: str) -> tuple[int, list[dict]]:
+        t_search = time.monotonic()
         try:
-            return idx, manager.search_amazon(query, max_results=2)
+            result = idx, manager.search_amazon(query, max_results=2)
+            perf_logger.info("[perf] Amazon search item #%d '%s': %.1fs", idx, query[:40], time.monotonic() - t_search)
+            return result
         except Exception as exc:
-            logger.warning("[curate] Amazon search failed for '%s': %s", query, exc)
+            logger.warning("[curate] Amazon search failed for '%s': %s (%.1fs)", query, exc, time.monotonic() - t_search)
             return idx, []
 
     results_by_item: dict[int, list[SearchResult]] = {i: [] for i in range(len(items))}
 
+    t_curation = time.monotonic()
     max_workers = min(len(items), 5)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
@@ -221,6 +232,7 @@ def get_curated_listing_results(plan: ShoppingPlan) -> tuple[List[SearchResults]
             total_found=len(results_by_item[i]),
         ))
 
+    perf_logger.info("[perf] Curation total (%d items, %d workers): %.1fs", len(items), max_workers, time.monotonic() - t_curation)
     return listing_results, "browserbase"
 
 
@@ -265,15 +277,18 @@ def select_top_product_urls(listing_results: List[SearchResults]) -> List[str]:
     return urls
 
 
-def add_urls_to_browserbase_cart(urls: List[str]) -> dict:
+def add_urls_to_browserbase_cart(
+    urls: List[str],
+    manager: "BrowserbaseManager | None" = None,
+) -> dict:
     """Add Amazon URLs to cart via Browserbase."""
-    from shopping_agent.app.tools.browserbase import BrowserbaseManager
-
     amazon_urls = [u for u in urls if _is_amazon_url(u)]
     if not amazon_urls:
         raise ValueError("No Amazon URLs provided — cannot add to cart")
 
-    manager = BrowserbaseManager()
+    if manager is None:
+        from shopping_agent.app.tools.browserbase import BrowserbaseManager
+        manager = BrowserbaseManager()
     return manager.add_to_cart(amazon_urls)
 
 

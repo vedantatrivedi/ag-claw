@@ -26,8 +26,12 @@ Usage:
 import asyncio
 import base64
 import json
+import logging
 import os
+import time
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from browserbase import Browserbase
 from playwright.async_api import async_playwright
@@ -179,7 +183,9 @@ class BrowserbaseManager:
 
     async def _search_amazon_async(self, query: str, max_results: int) -> list[dict]:
         cookies_data = self._load_cookies()
+        t0 = time.monotonic()
         session = self._create_session(timeout=300)
+        logger.info("[perf] Browserbase session created in %.1fs", time.monotonic() - t0)
 
         try:
             async with async_playwright() as p:
@@ -190,19 +196,20 @@ class BrowserbaseManager:
                 await self._inject_cookies(context, page, cookies_data)
 
                 search_url = f"https://www.amazon.in/s?k={query.replace(' ', '+')}"
-                await page.goto(search_url, wait_until="load", timeout=45000)
-                await page.wait_for_timeout(3000)
+                t1 = time.monotonic()
+                await page.goto(search_url, wait_until="networkidle", timeout=45000)
 
                 try:
                     await page.wait_for_selector(
                         '[data-component-type="s-search-result"]', timeout=20000
                     )
                 except Exception:
+                    logger.warning("[perf] Amazon search for '%s' — no results after %.1fs", query, time.monotonic() - t1)
                     return []
 
-                await page.wait_for_timeout(2000)
-
-                return await page.evaluate(_EXTRACT_RESULTS_JS, max_results)
+                results = await page.evaluate(_EXTRACT_RESULTS_JS, max_results)
+                logger.info("[perf] Amazon search for '%s' — %d results in %.1fs", query, len(results), time.monotonic() - t1)
+                return results
         finally:
             self._release_session(session.id)
 
@@ -221,25 +228,28 @@ class BrowserbaseManager:
 
     async def _add_to_cart_async(self, urls: list[str]) -> dict:
         cookies_data = self._load_cookies()
+        t0 = time.monotonic()
         session = self._create_session(timeout=300)
-        results = []
+        logger.info("[perf] Cart session created in %.1fs", time.monotonic() - t0)
         cart_screenshot_b64 = ""
 
         try:
             async with async_playwright() as p:
                 browser = await p.chromium.connect_over_cdp(session.connect_url)
                 context = browser.contexts[0]
-                page = context.pages[0] if context.pages else await context.new_page()
 
-                await self._inject_cookies(context, page, cookies_data)
+                # Inject cookies using the first page
+                first_page = context.pages[0] if context.pages else await context.new_page()
+                await self._inject_cookies(context, first_page, cookies_data)
 
-                for url in urls:
+                # Process all URLs in parallel using separate tabs
+                async def _add_single_item(url: str) -> dict:
+                    t_item = time.monotonic()
+                    page = await context.new_page()
                     status = {"url": url, "title": "", "image": "", "success": False, "message": ""}
                     try:
-                        await page.goto(url, wait_until="load", timeout=30000)
-                        await page.wait_for_timeout(2000)
+                        await page.goto(url, wait_until="networkidle", timeout=30000)
 
-                        # Extract title + product image
                         product_info = await page.evaluate("""
                             () => {
                                 const titleEl = document.getElementById('productTitle');
@@ -263,11 +273,17 @@ class BrowserbaseManager:
 
                         if not add_btn:
                             status["message"] = "Add to Cart button not found"
-                            results.append(status)
-                            continue
+                            logger.info("[perf] Cart item (no button) '%s' in %.1fs", url[:60], time.monotonic() - t_item)
+                            return status
 
                         await add_btn.click()
-                        await page.wait_for_timeout(3000)
+                        try:
+                            await page.wait_for_selector(
+                                '#sw-atc-confirmation, #huc-v2-order-row-confirm-text, #nav-cart-count',
+                                timeout=10000,
+                            )
+                        except Exception:
+                            pass
 
                         added = await page.evaluate("""
                             () => {
@@ -284,14 +300,19 @@ class BrowserbaseManager:
 
                     except Exception as e:
                         status["message"] = str(e)[:100]
+                    finally:
+                        await page.close()
 
-                    results.append(status)
+                    logger.info("[perf] Cart item '%s' — success=%s in %.1fs", url[:60], status["success"], time.monotonic() - t_item)
+                    return status
+
+                results = await asyncio.gather(*[_add_single_item(url) for url in urls])
+                results = list(results)
 
                 # Navigate to cart page and take a full-page screenshot
                 try:
-                    await page.goto("https://www.amazon.in/gp/cart/view.html", wait_until="load", timeout=30000)
-                    await page.wait_for_timeout(3000)
-                    screenshot_bytes = await page.screenshot(full_page=True)
+                    await first_page.goto("https://www.amazon.in/gp/cart/view.html", wait_until="networkidle", timeout=30000)
+                    screenshot_bytes = await first_page.screenshot(full_page=True)
                     cart_screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
                 except Exception:
                     cart_screenshot_b64 = ""
@@ -299,6 +320,7 @@ class BrowserbaseManager:
         finally:
             self._release_session(session.id)
 
+        logger.info("[perf] Cart add-to-cart total: %d items in %.1fs", len(urls), time.monotonic() - t0)
         return {"items": results, "cart_screenshot": cart_screenshot_b64}
 
     # ================================================================== #
@@ -383,7 +405,9 @@ class BrowserbaseManager:
 
     async def _search_flipkart_async(self, query: str, max_results: int) -> list[dict]:
         cookies_data = self._load_cookies(FLIPKART_COOKIES_FILE)
+        t0 = time.monotonic()
         session = self._create_session(timeout=300)
+        logger.info("[perf] Flipkart session created in %.1fs", time.monotonic() - t0)
 
         try:
             async with async_playwright() as p:
@@ -396,17 +420,18 @@ class BrowserbaseManager:
                 )
 
                 search_url = f"https://www.flipkart.com/search?q={query.replace(' ', '+')}"
-                await page.goto(search_url, wait_until="load", timeout=45000)
-                await page.wait_for_timeout(3000)
+                t1 = time.monotonic()
+                await page.goto(search_url, wait_until="networkidle", timeout=45000)
 
                 try:
                     await page.wait_for_selector("div[data-id]", timeout=20000)
                 except Exception:
+                    logger.warning("[perf] Flipkart search for '%s' — no results after %.1fs", query, time.monotonic() - t1)
                     return []
 
-                await page.wait_for_timeout(2000)
-
-                return await page.evaluate(_EXTRACT_FLIPKART_RESULTS_JS, max_results)
+                results = await page.evaluate(_EXTRACT_FLIPKART_RESULTS_JS, max_results)
+                logger.info("[perf] Flipkart search for '%s' — %d results in %.1fs", query, len(results), time.monotonic() - t1)
+                return results
         finally:
             self._release_session(session.id)
 
@@ -425,7 +450,9 @@ class BrowserbaseManager:
 
     async def _add_to_cart_flipkart_async(self, urls: list[str]) -> dict:
         cookies_data = self._load_cookies(FLIPKART_COOKIES_FILE)
+        t0 = time.monotonic()
         session = self._create_session(timeout=300)
+        logger.info("[perf] Flipkart cart session created in %.1fs", time.monotonic() - t0)
         results = []
         cart_screenshot_b64 = ""
 
@@ -440,10 +467,10 @@ class BrowserbaseManager:
                 )
 
                 for url in urls:
+                    t_item = time.monotonic()
                     status = {"url": url, "title": "", "image": "", "success": False, "message": ""}
                     try:
-                        await page.goto(url, wait_until="load", timeout=30000)
-                        await page.wait_for_timeout(2000)
+                        await page.goto(url, wait_until="networkidle", timeout=30000)
 
                         # Extract title from page title
                         title = await page.evaluate("""
@@ -478,6 +505,7 @@ class BrowserbaseManager:
                         if is_oos:
                             status["message"] = "Out of stock"
                             results.append(status)
+                            logger.info("[perf] Flipkart cart item (OOS) '%s' in %.1fs", url[:60], time.monotonic() - t_item)
                             continue
 
                         # Flipkart uses React Native Web — "Add to cart" is a div, not a button
@@ -493,9 +521,14 @@ class BrowserbaseManager:
                             except Exception:
                                 status["message"] = "Add to Cart button not found"
                                 results.append(status)
+                                logger.info("[perf] Flipkart cart item (no button) '%s' in %.1fs", url[:60], time.monotonic() - t_item)
                                 continue
 
-                        await page.wait_for_timeout(3000)
+                        # Wait for cart update indication instead of hard sleep
+                        try:
+                            await page.wait_for_selector('a[href*="viewcart"] span', timeout=10000)
+                        except Exception:
+                            pass
 
                         # Check cart count from header
                         cart_count = await page.evaluate("""
@@ -512,14 +545,14 @@ class BrowserbaseManager:
                         status["message"] = str(e)[:100]
 
                     results.append(status)
+                    logger.info("[perf] Flipkart cart item '%s' — success=%s in %.1fs", url[:60], status["success"], time.monotonic() - t_item)
 
                 # Navigate to cart page and take a full-page screenshot
                 try:
                     await page.goto(
                         "https://www.flipkart.com/viewcart?marketplace=FLIPKART",
-                        wait_until="load", timeout=30000,
+                        wait_until="networkidle", timeout=30000,
                     )
-                    await page.wait_for_timeout(3000)
                     screenshot_bytes = await page.screenshot(full_page=True)
                     cart_screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
                 except Exception:
@@ -528,6 +561,7 @@ class BrowserbaseManager:
         finally:
             self._release_session(session.id)
 
+        logger.info("[perf] Flipkart cart total: %d items in %.1fs", len(urls), time.monotonic() - t0)
         return {"items": results, "cart_screenshot": cart_screenshot_b64}
 
 

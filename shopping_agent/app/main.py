@@ -10,6 +10,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 from rich import print as rprint
+from rich.prompt import Confirm
 
 from typing import List
 
@@ -495,17 +496,38 @@ def guided_party(
     budget_inr = prompt_for_required_budget()
 
     console.print("\n[bold cyan]Creating pre-authorization...[/bold cyan]")
-    result = orchestrator.run_guided_party_flow(
+    preauth_result = orchestrator.create_guided_party_preauth(
+        preferences_answers=preferences,
+        budget_inr=budget_inr,
+    )
+
+    if not preauth_result.get("success"):
+        console.print(f"[bold red]Error:[/bold red] {preauth_result.get('error')}")
+        raise typer.Exit(code=1)
+
+    preauth = preauth_result.get("preauth", {})
+    console.print("\n[bold green]Pre-auth created[/bold green]")
+    console.print(f"[dim]Order ID:[/dim] {preauth.get('order_id', 'N/A')}")
+    console.print(f"[dim]Redirect URL:[/dim] {preauth.get('redirect_url', 'N/A')}")
+    console.print("\n[bold yellow]Open the checkout URL and authorize the pre-auth before continuing.[/bold yellow]")
+
+    if not Confirm.ask("[bold cyan]Continue after authorization is complete?[/bold cyan]", default=True):
+        console.print("[yellow]Stopped before authorization polling.[/yellow]")
+        raise typer.Exit(code=0)
+
+    console.print("\n[bold cyan]Waiting for authorization...[/bold cyan]")
+    result = orchestrator.complete_guided_party_after_authorization(
         user_request=request,
         preferences_answers=preferences,
         budget_inr=budget_inr,
+        preauth=preauth,
         apply_postprocessing=not no_postprocess,
     )
 
     if not result.get("success"):
         console.print(f"[bold red]Error:[/bold red] {result.get('error')}")
-        if result.get("stage") == "preauth":
-            console.print("[dim]Pre-auth did not complete, so planning was not started.[/dim]")
+        if result.get("stage") == "authorization":
+            console.print("[dim]Pre-auth was created but not authorized successfully.[/dim]")
         raise typer.Exit(code=1)
 
     preauth = result.get("preauth", {})

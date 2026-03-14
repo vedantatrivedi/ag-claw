@@ -39,19 +39,45 @@ class GuidedPartyWorkflow:
         questions = response.data.get("questions", [])
         return questions or DEFAULT_PARTY_QUESTIONS
 
-    def run(
+    def create_preauth(
+        self,
+        *,
+        preferences_answers: Dict[str, str],
+        budget_inr: float,
+    ) -> Dict:
+        """Create the budget preauth and return the checkout handoff details."""
+        budget_paisa = budget_inr_to_paisa(budget_inr)
+
+        try:
+            preauth = create_budget_preauth(budget_paisa=budget_paisa)
+        except Exception as exc:
+            return {
+                "success": False,
+                "stage": "preauth",
+                "error": str(exc),
+                "preferences_answers": preferences_answers,
+                "budget_inr": budget_inr,
+            }
+
+        return {
+            "success": True,
+            "stage": "preauth_created",
+            "preferences_answers": preferences_answers,
+            "budget_inr": budget_inr,
+            "preauth": preauth,
+        }
+
+    def complete_after_authorization(
         self,
         *,
         user_request: str,
         preferences_answers: Dict[str, str],
         budget_inr: float,
+        preauth: Dict,
         apply_postprocessing: bool = True,
     ) -> Dict:
-        """Execute the guided flow after interactive inputs are collected."""
-        budget_paisa = budget_inr_to_paisa(budget_inr)
-
+        """Wait for authorization, then generate the plan and placeholder results."""
         try:
-            preauth = create_budget_preauth(budget_paisa=budget_paisa)
             authorized = get_preauth_status(
                 preauth["order_id"],
                 wait_for_status="AUTHORIZED",
@@ -59,8 +85,9 @@ class GuidedPartyWorkflow:
         except Exception as exc:
             return {
                 "success": False,
-                "stage": "preauth",
+                "stage": "authorization",
                 "error": str(exc),
+                "preauth": preauth,
                 "preferences_answers": preferences_answers,
                 "budget_inr": budget_inr,
             }
@@ -110,3 +137,27 @@ class GuidedPartyWorkflow:
             **result.model_dump(),
             "listing_results": [entry.model_dump() for entry in listing_results],
         }
+
+    def run(
+        self,
+        *,
+        user_request: str,
+        preferences_answers: Dict[str, str],
+        budget_inr: float,
+        apply_postprocessing: bool = True,
+    ) -> Dict:
+        """Execute the full guided flow in one call."""
+        preauth_result = self.create_preauth(
+            preferences_answers=preferences_answers,
+            budget_inr=budget_inr,
+        )
+        if not preauth_result.get("success"):
+            return preauth_result
+
+        return self.complete_after_authorization(
+            user_request=user_request,
+            preferences_answers=preferences_answers,
+            budget_inr=budget_inr,
+            preauth=preauth_result["preauth"],
+            apply_postprocessing=apply_postprocessing,
+        )

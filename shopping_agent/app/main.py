@@ -457,5 +457,18 @@ def _display_plan(plan: dict) -> None:
             console.print(f"  ? {clarification}")
 
 
+@app.command()
+def discord() -> None:
+    """
+    Start the Discord bot.
+
+    Requires DISCORD_BOT_TOKEN in .env or environment variables.
+    """
+    from shopping_agent.app.discord_bot import run_bot
+
+    console.print("\n[bold cyan]Starting Discord Bot...[/bold cyan]\n")
+    run_bot()
+
+
 if __name__ == "__main__":
     app()

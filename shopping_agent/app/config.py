@@ -67,5 +67,5 @@ class Config:
         return 0.5
 
 
-# Validate configuration on import
-Config.validate()
+# Note: Config validation is done lazily when agents are initialized
+# This allows tests to set environment variables before validation

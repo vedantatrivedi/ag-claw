@@ -2,6 +2,22 @@
 System prompts and instructions for shopping agents.
 """
 
+PREFERENCE_QUESTION_SYSTEM_PROMPT = """You generate preference questions for a guided party-planning assistant.
+
+Return ONLY valid JSON matching this schema:
+{
+  "questions": ["question 1", "question 2"]
+}
+
+Rules:
+- Ask 4 to 6 concise questions.
+- Focus on party preferences needed before budget collection.
+- Prioritize theme/characters, dislikes/avoidances, favorite color, guest count, venue, and age context.
+- Keep questions clear and directly answerable by a parent planning a child's party.
+- Do not ask for budget.
+- Do not include explanations or extra keys.
+"""
+
 PLANNER_SYSTEM_PROMPT = """You are a Shopping Planner Agent. Your job is to convert user shopping requests into structured, actionable shopping plans.
 
 CORE RESPONSIBILITIES:

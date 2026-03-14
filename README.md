@@ -98,18 +98,18 @@ All in **~1.4 seconds** per search with **99%+ success rate**.
 git clone https://github.com/vedantatrivedi/ag-claw.git
 cd ag-claw
 
-# Install with Poetry
-poetry install
-poetry shell
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
 
 # Set up environment
 cp .env.example .env
 # Edit .env and add your API keys:
 # - OPENAI_API_KEY=your-key
 # - SERPAPI_KEY=your-key
-
-# Install SerpAPI package
-pip3 install google-search-results
 ```
 
 ### CLI Usage
@@ -434,19 +434,19 @@ graph LR
 
 ```bash
 # All tests
-poetry run pytest -v
+python3 -m pytest -v
 
 # With coverage
-poetry run pytest --cov=shopping_agent --cov-report=term --cov-report=html
+python3 -m pytest --cov=shopping_agent --cov-report=term --cov-report=html
 
 # Specific test file
-poetry run pytest shopping_agent/tests/test_api_endpoints.py -v
+python3 -m pytest shopping_agent/tests/test_api_endpoints.py -v
 
 # Integration tests only
-poetry run pytest -m "integration"
+python3 -m pytest -m "integration"
 
 # Skip integration tests
-poetry run pytest -m "not integration"
+python3 -m pytest -m "not integration"
 ```
 
 ### Test Categories
@@ -464,7 +464,7 @@ GitHub Actions runs on every PR and push to main:
 - ✅ Unit and integration tests
 - ✅ Code quality (black, ruff, mypy)
 - ✅ Coverage reporting
-- ✅ Dependency caching
+- ✅ pip dependency caching
 
 ---
 
@@ -474,13 +474,13 @@ GitHub Actions runs on every PR and push to main:
 
 ```bash
 # Format code
-poetry run black shopping_agent/
+black shopping_agent/
 
 # Lint
-poetry run ruff check shopping_agent/
+ruff check shopping_agent/
 
 # Type check
-poetry run mypy shopping_agent/
+mypy shopping_agent/
 ```
 
 ### Configuration
@@ -588,9 +588,9 @@ We welcome contributions! Here's how to get started:
 
 4. **Run tests and linting**
    ```bash
-   poetry run pytest
-   poetry run black shopping_agent/
-   poetry run ruff check shopping_agent/
+   python3 -m pytest
+   black shopping_agent/
+   ruff check shopping_agent/
    ```
 
 5. **Commit and push**

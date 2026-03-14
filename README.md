@@ -536,20 +536,47 @@ The planner agent follows strict guidelines:
 
 ## 🌐 Deployment
 
-### Docker (Coming Soon)
+### AWS EC2 (Recommended)
 
+Complete deployment guide available in [DEPLOYMENT.md](DEPLOYMENT.md)
+
+**Quick deploy to EC2:**
 ```bash
-docker build -t shopping-agent .
-docker run -p 8000:8000 --env-file .env shopping-agent
+# First-time setup (on EC2 instance)
+bash setup-ec2.sh
+
+# Edit .env with your API keys
+nano .env
+
+# Start service
+sudo systemctl start ag-claw
+
+# Future updates
+./deploy.sh
 ```
 
-### Cloud Deployment
+**Features:**
+- Systemd service for auto-restart
+- Nginx reverse proxy
+- HTTPS with Let's Encrypt
+- Logging and monitoring
+- Production-ready configuration
 
-**Recommended platforms:**
+**Cost:** ~$30/month (t3.medium)
+
+### Other Platforms
+
 - **Railway**: One-click FastAPI deploy
 - **Render**: Free tier available
 - **Fly.io**: Global edge deployment
 - **AWS Lambda**: Serverless option
+
+### Docker (Coming Soon)
+
+```bash
+docker build -t ag-claw .
+docker run -p 8000:8000 --env-file .env ag-claw
+```
 
 ### Production Checklist
 

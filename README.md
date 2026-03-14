@@ -2,7 +2,7 @@
 
 # 🤖 ag-claw
 
-**Smart Shopping with AI Agents**
+**Ask for Anything. AI Searches 49+ Sites. Get the Best Deals.**
 
 [![CI](https://github.com/vedantatrivedi/ag-claw/workflows/CI/badge.svg)](https://github.com/vedantatrivedi/ag-claw/actions)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)

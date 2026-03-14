@@ -18,8 +18,10 @@ from shopping_agent.app.config import Config
 from shopping_agent.app.interactive import (
     run_interactive_planning,
     prompt_for_budget,
+    prompt_for_required_budget,
     prompt_for_quantity,
     build_enhanced_request,
+    gather_guided_preferences,
 )
 from shopping_agent.app.models import PlanItem, SearchResults
 
@@ -387,6 +389,58 @@ def interactive(
         metadata_table.add_row("Budget", f"${budget:.2f}")
     console.print(metadata_table)
     console.print()
+
+
+@app.command("guided-party")
+def guided_party(
+    request: str = typer.Argument(..., help="Broad party-planning request"),
+    no_postprocess: bool = typer.Option(
+        False,
+        "--no-postprocess",
+        help="Disable post-processing of planner output",
+    ),
+) -> None:
+    """
+    Guided party planning with preference collection and budget pre-auth.
+    """
+    console.print("\n[bold cyan]Shopping Agent - Guided Party Planning[/bold cyan]\n")
+    console.print(f"[yellow]Request:[/yellow] {request}\n")
+
+    orchestrator = ShoppingOrchestrator()
+
+    with console.status("[bold green]Generating party preference questions..."):
+        questions = orchestrator.generate_guided_party_questions(request)
+
+    console.print("[bold]Tell me a bit more before I lock the budget:[/bold]\n")
+    preferences = gather_guided_preferences(questions)
+    budget_inr = prompt_for_required_budget()
+
+    console.print("\n[bold cyan]Creating pre-authorization...[/bold cyan]")
+    result = orchestrator.run_guided_party_flow(
+        user_request=request,
+        preferences_answers=preferences,
+        budget_inr=budget_inr,
+        apply_postprocessing=not no_postprocess,
+    )
+
+    if not result.get("success"):
+        console.print(f"[bold red]Error:[/bold red] {result.get('error')}")
+        if result.get("stage") == "preauth":
+            console.print("[dim]Pre-auth did not complete, so planning was not started.[/dim]")
+        raise typer.Exit(code=1)
+
+    preauth = result.get("preauth", {})
+    console.print("\n[bold green]Pre-auth authorized[/bold green]")
+    console.print(f"[dim]Order ID:[/dim] {preauth.get('order_id', 'N/A')}")
+    console.print(f"[dim]Redirect URL:[/dim] {preauth.get('redirect_url', 'N/A')}")
+    console.print(f"[dim]Authorized Status:[/dim] {preauth.get('authorized_status', 'N/A')}\n")
+
+    console.print("[bold green]Shopping Plan:[/bold green]\n")
+    _display_plan(result.get("plan", {}))
+
+    console.print("\n[bold cyan]Placeholder Listing Results:[/bold cyan]\n")
+    listing_results = [SearchResults(**entry) for entry in result.get("listing_results", [])]
+    _display_search_results(listing_results)
 
 
 @app.command()

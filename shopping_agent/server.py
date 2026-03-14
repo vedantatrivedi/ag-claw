@@ -146,7 +146,31 @@ class AddToCartResponse(BaseModel):
     cart_screenshot: str = Field(default="", description="Base64 PNG screenshot of the final cart page")
 
 
-# ---- Endpoints ---- #
+# ---- Flipkart models ---- #
+
+class SaveFlipkartCookiesResponse(BaseModel):
+    flipkart_cookies: int
+    total_cookies: int
+    local_storage_keys: int
+
+
+class FlipkartProductResult(BaseModel):
+    title: str = ""
+    price: str = ""
+    rating: str = ""
+    reviews: str = ""
+    pid: str = ""
+    url: str = ""
+    image: str = ""
+
+
+class FlipkartSearchResponse(BaseModel):
+    query: str
+    count: int
+    results: list[FlipkartProductResult]
+
+
+# ---- Amazon Endpoints ---- #
 
 # SerpAPI endpoints
 @app.post("/plan", response_model=PlanResponse)
@@ -251,6 +275,55 @@ def add_to_cart(req: AddToCartRequest):
     """Add products to Amazon cart by URL or ASIN. Returns product images and a cart screenshot."""
     mgr = get_manager()
     result = mgr.add_to_cart(req.urls)
+    items = result["items"]
+    added = sum(1 for s in items if s["success"])
+    return AddToCartResponse(
+        total=len(items),
+        added=added,
+        failed=len(items) - added,
+        items=[CartItemStatus(**s) for s in items],
+        cart_screenshot=result["cart_screenshot"],
+    )
+
+
+# ---- Flipkart Endpoints ---- #
+
+@app.post("/flipkart/login/start", response_model=StartLoginResponse)
+def start_flipkart_login(req: StartLoginRequest = StartLoginRequest()):
+    """Start a browser session for manual Flipkart login. Returns a debug URL to open in your browser."""
+    mgr = get_manager()
+    data = mgr.start_flipkart_login_session(timeout=req.timeout)
+    return StartLoginResponse(**data)
+
+
+@app.post("/flipkart/login/save-cookies", response_model=SaveFlipkartCookiesResponse)
+def save_flipkart_cookies():
+    """Extract cookies from the running Flipkart login session and save them locally."""
+    mgr = get_manager()
+    try:
+        summary = mgr.save_flipkart_cookies()
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return SaveFlipkartCookiesResponse(**summary)
+
+
+@app.post("/flipkart/search", response_model=FlipkartSearchResponse)
+def search_flipkart(req: SearchRequest):
+    """Search Flipkart and return top non-sponsored results."""
+    mgr = get_manager()
+    results = mgr.search_flipkart(req.query, req.max_results)
+    return FlipkartSearchResponse(
+        query=req.query,
+        count=len(results),
+        results=[FlipkartProductResult(**r) for r in results],
+    )
+
+
+@app.post("/flipkart/cart/add", response_model=AddToCartResponse)
+def add_to_cart_flipkart(req: AddToCartRequest):
+    """Add products to Flipkart cart by URL. Returns product images and a cart screenshot."""
+    mgr = get_manager()
+    result = mgr.add_to_cart_flipkart(req.urls)
     items = result["items"]
     added = sum(1 for s in items if s["success"])
     return AddToCartResponse(

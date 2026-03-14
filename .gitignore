@@ -31,6 +31,8 @@ ENV/
 .env.local
 .bb_cookies.json
 .bb_session
+.bb_flipkart_cookies.json
+.bb_flipkart_session
 .steel_session
 
 # IDE

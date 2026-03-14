@@ -39,9 +39,12 @@ This system uses multiple AI agents to help users shop:
 - ✅ **Add to cart API** — add products by URL/ASIN with cart screenshot
 - ✅ **Cookie persistence** — one-time login, reuse across sessions
 - ✅ **FastAPI server** with Swagger docs
+- ✅ **Flipkart search API** — search products, filter sponsored results
+- ✅ **Flipkart add to cart API** — add products by URL with cart screenshot
+- ✅ **Flipkart cookie persistence** — one-time login, reuse across sessions
 
 ### Next Phase
-- 🔄 Multi-platform search (Flipkart, etc.)
+- 🔄 Product ranking and comparison
 - 🔄 Price tracking
 - 🔄 Pine Labs payment integration
 - 🔄 Agent handoffs with context passing
@@ -381,6 +384,10 @@ Configuration is managed through environment variables in `.env`:
 OPENAI_API_KEY=your-openai-key
 SERPAPI_KEY=your-serpapi-key
 
+# Required for Browser Agent APIs (Amazon/Flipkart)
+BROWSERBASE_API_KEY=your-browserbase-api-key
+BROWSERBASE_PROJECT_ID=your-browserbase-project-id
+
 # Optional (defaults shown)
 OPENAI_MODEL=gpt-4o-mini
 PLANNER_TEMPERATURE=0.3
@@ -645,10 +652,153 @@ curl -X POST http://localhost:8000/search \
 3. **Sponsored filtering**: Search results automatically skip sponsored/ad listings
 4. **Cart screenshots**: The add-to-cart endpoint navigates to the cart page after adding all items and captures a full-page screenshot
 
+## Browser Agent API (Flipkart)
+
+Same architecture as the Amazon agent — Browserbase sessions with cookie persistence for Flipkart.
+
+### API Endpoints
+
+#### `POST /flipkart/login/start` — Start Flipkart Login Session
+
+Creates a Browserbase browser session and returns a debug URL. Open the URL in your browser, navigate to flipkart.com, and log in manually. This only needs to be done once — cookies are saved for future sessions.
+
+```bash
+curl -X POST http://localhost:8000/flipkart/login/start \
+  -H "Content-Type: application/json" \
+  -d '{"timeout": 900}'
+```
+
+**Response:**
+```json
+{
+  "session_id": "c78f7050-...",
+  "cdp_url": "wss://connect.usw2.browserbase.com/...",
+  "debug_url": "https://www.browserbase.com/devtools-fullscreen/inspector.html?wss=..."
+}
+```
+
+---
+
+#### `POST /flipkart/login/save-cookies` — Save Flipkart Cookies
+
+After logging into Flipkart via the debug URL, call this to extract and save cookies locally.
+
+```bash
+curl -X POST http://localhost:8000/flipkart/login/save-cookies
+```
+
+**Response:**
+```json
+{
+  "flipkart_cookies": 18,
+  "total_cookies": 85,
+  "local_storage_keys": 5
+}
+```
+
+---
+
+#### `POST /flipkart/search` — Search Flipkart
+
+Searches Flipkart and returns the top non-sponsored results.
+
+```bash
+curl -X POST http://localhost:8000/flipkart/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "wireless earbuds", "max_results": 8}'
+```
+
+**Request body:**
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `query` | string | required | Search query |
+| `max_results` | int | 8 | Max non-sponsored results (1-20) |
+
+**Response:**
+```json
+{
+  "query": "wireless earbuds",
+  "count": 8,
+  "results": [
+    {
+      "title": "boAt Airdopes 161/163, ASAP Charge, 40H Battery...",
+      "price": "₹999",
+      "rating": "4.1",
+      "reviews": "(15,45,457)",
+      "pid": "ACCG6DS7WDJHGWSH",
+      "url": "https://www.flipkart.com/boat-airdopes-.../p/itm...?pid=...",
+      "image": "https://rukminim2.flixcart.com/image/..."
+    }
+  ]
+}
+```
+
+---
+
+#### `POST /flipkart/cart/add` — Add Products to Flipkart Cart
+
+Adds products to the Flipkart cart by URL. Returns product images for each item and a full-page screenshot of the cart.
+
+```bash
+curl -X POST http://localhost:8000/flipkart/cart/add \
+  -H "Content-Type: application/json" \
+  -d '{"urls": ["https://www.flipkart.com/product-name/p/itm...?pid=..."]}'
+```
+
+**Request body:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `urls` | string[] | Full Flipkart product URLs or `/product/p/...` paths |
+
+**Response:**
+```json
+{
+  "total": 1,
+  "added": 1,
+  "failed": 0,
+  "items": [
+    {
+      "url": "https://www.flipkart.com/...",
+      "title": "boAt Airdopes 161/163...",
+      "image": "https://rukminim2.flixcart.com/image/...",
+      "success": true,
+      "message": "Added (cart: 1)"
+    }
+  ],
+  "cart_screenshot": "iVBORw0KGgoAAAANSUhEUg..."
+}
+```
+
+---
+
+### One-Time Flipkart Login Flow
+
+```bash
+# 1. Start a login session
+curl -X POST http://localhost:8000/flipkart/login/start
+
+# 2. Open the debug_url from the response in your browser
+#    Navigate to flipkart.com and log in
+
+# 3. Save cookies
+curl -X POST http://localhost:8000/flipkart/login/save-cookies
+
+# 4. Now search and add-to-cart work without manual login
+curl -X POST http://localhost:8000/flipkart/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "football"}'
+```
+
+### How It Works (Flipkart)
+
+1. **Cookie persistence**: Flipkart cookies are saved to `.bb_flipkart_cookies.json` (separate from Amazon)
+2. **Session per request**: Same Browserbase session-per-request model as Amazon
+3. **Sponsored filtering**: Results skip items with "Ad"/"Sponsored" badges or `fm=neo` in URLs
+4. **React Native Web**: Flipkart uses React Native Web — add-to-cart clicks target `div` elements, not buttons
+
 ## Next Phase
 
 ### Planned Features
-- Multi-platform search (Flipkart, etc.)
 - Product ranking and comparison
 - Price tracking
 - Agent handoffs with context passing

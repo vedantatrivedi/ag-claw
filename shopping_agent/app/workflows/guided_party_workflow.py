@@ -4,20 +4,26 @@ Guided party-planning workflow with budget pre-authorization.
 
 from __future__ import annotations
 
+import logging
+import time
 from typing import Dict, List, Optional
 
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 from shopping_agent.app.agents.planner import PlannerAgent
 from shopping_agent.app.guided_party import (
     DEFAULT_PARTY_QUESTIONS,
     PreferenceQuestionAgent,
+    add_urls_to_browserbase_cart,
     build_guided_request,
-    build_placeholder_listing_results,
     budget_inr_to_paisa,
+    get_curated_listing_results,
+    select_top_product_urls,
 )
 from shopping_agent.app.models import GuidedPartyPlanResult, ShoppingPlan
-from shopping_agent.app.tools.pinelabs import create_budget_preauth, get_preauth_status
+from shopping_agent.app.tools.pinelabs import create_budget_preauth, capture_preauth, get_preauth_status
 
 
 class GuidedPartyWorkflow:
@@ -32,6 +38,17 @@ class GuidedPartyWorkflow:
     ):
         self.planner = planner or PlannerAgent(client=client)
         self.question_agent = question_agent or PreferenceQuestionAgent(client=client)
+        self._browserbase_manager = None
+
+    def _get_browserbase_manager(self):
+        """Lazily create and reuse a single BrowserbaseManager instance."""
+        if self._browserbase_manager is None:
+            try:
+                from shopping_agent.app.tools.browserbase import BrowserbaseManager
+                self._browserbase_manager = BrowserbaseManager()
+            except Exception:
+                logger.warning("[workflow] BrowserbaseManager unavailable")
+        return self._browserbase_manager
 
     def generate_preference_questions(self, user_request: str) -> List[str]:
         """Return preference questions with fallback behavior handled by the agent."""
@@ -77,6 +94,9 @@ class GuidedPartyWorkflow:
         apply_postprocessing: bool = True,
     ) -> Dict:
         """Wait for authorization, then generate the plan and placeholder results."""
+        t_total = time.monotonic()
+
+        t0 = time.monotonic()
         try:
             authorized = get_preauth_status(
                 preauth["order_id"],
@@ -91,7 +111,9 @@ class GuidedPartyWorkflow:
                 "preferences_answers": preferences_answers,
                 "budget_inr": budget_inr,
             }
+        logger.info("[perf] Pine Labs auth polling: %.1fs", time.monotonic() - t0)
 
+        t0 = time.monotonic()
         enriched_request = build_guided_request(
             original_request=user_request,
             preferences=preferences_answers,
@@ -101,6 +123,7 @@ class GuidedPartyWorkflow:
             enriched_request,
             apply_postprocessing=apply_postprocessing,
         )
+        logger.info("[perf] LLM planning: %.1fs", time.monotonic() - t0)
 
         if not planner_response.success:
             return {
@@ -116,9 +139,15 @@ class GuidedPartyWorkflow:
                 "error_data": planner_response.data,
             }
 
+        t0 = time.monotonic()
         plan_dict = planner_response.data.get("plan", {})
         plan = ShoppingPlan(**plan_dict)
-        listing_results = build_placeholder_listing_results(plan)
+        listing_results, curation_mode = get_curated_listing_results(
+            plan, manager=self._get_browserbase_manager()
+        )
+        selected_product_urls = select_top_product_urls(listing_results)
+        logger.info("[perf] Browserbase curation (%d items): %.1fs", len(plan.items), time.monotonic() - t0)
+        logger.info("[perf] complete_after_authorization total: %.1fs", time.monotonic() - t_total)
 
         result = GuidedPartyPlanResult(
             preferences_asked=list(preferences_answers.keys()),
@@ -130,12 +159,98 @@ class GuidedPartyWorkflow:
             },
             plan=plan.model_dump(),
             planner_metadata=planner_response.metadata,
+            curation_mode=curation_mode,
             listing_results=listing_results,
+            selected_product_urls=selected_product_urls,
         )
         return {
             "success": True,
             **result.model_dump(),
             "listing_results": [entry.model_dump() for entry in listing_results],
+        }
+
+    def add_to_cart(
+        self,
+        *,
+        listing_results: List[Dict],
+        selected_urls: Optional[List[str]] = None,
+    ) -> Dict:
+        """Add curated products to Amazon cart using Browserbase."""
+        t_total = time.monotonic()
+
+        urls = selected_urls or []
+        logger.warning("[cart] selected_urls received: %s", urls)
+        if not urls:
+            from shopping_agent.app.models import SearchResults
+
+            normalized_results = []
+            for entry in listing_results:
+                normalized_results.append(
+                    entry if isinstance(entry, SearchResults) else SearchResults(**entry)
+                )
+            urls = select_top_product_urls(normalized_results)
+
+        if not urls:
+            return {
+                "success": False,
+                "stage": "cart",
+                "error": "No curated product URLs available to add to cart",
+            }
+        if any("placeholder.local" in url for url in urls):
+            return {
+                "success": False,
+                "stage": "cart",
+                "error": "Cart add requires real curated product URLs, not placeholder results",
+                "selected_product_urls": urls,
+            }
+
+        logger.warning("[cart] URLs going to browserbase: %s", urls)
+        try:
+            cart_result = add_urls_to_browserbase_cart(urls, manager=self._get_browserbase_manager())
+            logger.warning("[cart] browserbase result: %s", cart_result)
+        except Exception as exc:
+            logger.warning("[cart] browserbase exception: %s", exc)
+            return {
+                "success": False,
+                "stage": "cart",
+                "error": str(exc),
+                "selected_product_urls": urls,
+            }
+
+        logger.info("[perf] add_to_cart total: %.1fs", time.monotonic() - t_total)
+        return {
+            "success": True,
+            "selected_product_urls": urls,
+            "cart": cart_result,
+        }
+
+    def capture_payment(
+        self,
+        *,
+        order_id: str,
+        capture_amount_paisa: int,
+    ) -> Dict:
+        """Capture the pre-authorized payment after cart is confirmed."""
+        try:
+            result = capture_preauth(
+                order_id=order_id,
+                capture_amount_paisa=capture_amount_paisa,
+                wait_for_authorized=False,
+            )
+        except Exception as exc:
+            return {
+                "success": False,
+                "stage": "capture",
+                "error": str(exc),
+                "order_id": order_id,
+            }
+
+        return {
+            "success": True,
+            "order_id": order_id,
+            "captured_amount_paisa": capture_amount_paisa,
+            "capture_status": result.get("capture_status"),
+            "final_order_status": result.get("final_order_status"),
         }
 
     def run(

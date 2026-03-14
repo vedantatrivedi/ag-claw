@@ -106,80 +106,102 @@ class SerpAPISearchAgent:
         ranked = sorted(products, key=lambda p: p.final_score or 0, reverse=True)
         return ranked
 
-    def search(self, search_task: SearchTask) -> SearchResults:
-        """Search Google Shopping via SerpAPI."""
-        search_query = search_task.plan_item.search_query or search_task.search_query
-
-        # Google Shopping search
+    def _search_site(self, query: str, site: str) -> List[SearchResult]:
+        """Search a specific site via Google organic search."""
         params = {
-            "engine": "google_shopping",
-            "q": search_query,
+            "engine": "google",
+            "q": f"{query} site:{site}",
             "location": "India",
             "gl": "in",
             "hl": "en",
             "api_key": self.api_key,
-            "num": 10,
+            "num": 5,
         }
+        try:
+            results_data = GoogleSearch(params).get_dict()
+        except Exception as e:
+            print(f"SerpAPI organic search error ({site}): {e}")
+            return []
+
+        source_label = "Amazon" if "amazon" in site else "Flipkart"
+        products: List[SearchResult] = []
+
+        for item in results_data.get("organic_results", [])[:5]:
+            link = item.get("link", "")
+            if not link or site not in link:
+                continue
+            # Skip search/listing pages, only keep product pages
+            if "amazon" in site and "/dp/" not in link and "/gp/" not in link:
+                continue
+            if "flipkart" in site and "/p/" not in link:
+                continue
+
+            title = item.get("title", "Unknown Product")
+            image_url = ""
+            if item.get("thumbnail"):
+                image_url = item["thumbnail"]
+
+            # Try to extract price from snippet
+            price = None
+            snippet = item.get("snippet", "")
+            import re
+            price_match = re.search(r'₹\s*([\d,]+)', snippet)
+            if price_match:
+                try:
+                    price = float(price_match.group(1).replace(",", ""))
+                except ValueError:
+                    pass
+
+            # Extract rating from rich snippet
+            rating = None
+            review_count = None
+            rich = item.get("rich_snippet", {}).get("top", {})
+            if "rating" in rich:
+                try:
+                    rating = float(rich["rating"])
+                except (ValueError, TypeError):
+                    pass
+            if "reviews" in rich:
+                try:
+                    review_count = int(str(rich["reviews"]).replace(",", ""))
+                except (ValueError, TypeError):
+                    pass
+
+            products.append(SearchResult(
+                title=title,
+                url=link,
+                price=price,
+                source=source_label,
+                relevance_score=0.9,
+                rating=rating,
+                review_count=review_count,
+                in_stock=True,
+                image_url=image_url,
+            ))
+
+        return products
+
+    def search(self, search_task: SearchTask) -> SearchResults:
+        """Search Amazon.in and Flipkart via SerpAPI Google organic search."""
+        search_query = search_task.plan_item.search_query or search_task.search_query
 
         try:
-            search = GoogleSearch(params)
-            results_data = search.get_dict()
+            # Search both sites
+            amazon_results = self._search_site(search_query, "amazon.in")
+            flipkart_results = self._search_site(search_query, "flipkart.com")
 
-            shopping_results = results_data.get("shopping_results", [])
-
-            products = []
-            for item in shopping_results[:20]:  # Get more for better ranking
-                # Extract price
-                price = None
-                if "price" in item:
-                    price_str = str(item["price"]).replace("₹", "").replace(",", "").strip()
-                    try:
-                        price = float(price_str)
-                    except ValueError:
-                        pass
-
-                # Extract rating
-                rating = None
-                review_count = None
-                if "rating" in item:
-                    rating = float(item["rating"])
-                if "reviews" in item:
-                    review_count = int(item["reviews"])
-
-                # Extract URLs - try to get direct merchant link if available
-                # First priority: direct merchant link (if available in offers)
-                product_url = ""
-                if "link" in item:  # Direct merchant link (when available)
-                    product_url = item["link"]
-                elif "product_link" in item:  # Google Shopping aggregator page
-                    product_url = item["product_link"]
-
-                image_url = item.get("thumbnail") or ""
-
-                products.append(
-                    SearchResult(
-                        title=item.get("title", "Unknown Product"),
-                        url=product_url,
-                        price=price,
-                        source=item.get("source", "Google Shopping"),
-                        relevance_score=0.9,
-                        rating=rating,
-                        review_count=review_count,
-                        in_stock=True,  # Google Shopping usually shows in-stock items
-                        image_url=image_url,
-                    )
-                )
+            products = amazon_results + flipkart_results
 
             # Apply ranking algorithm
             ranked_products = self._rank_products(products, search_query)
 
-            # Return only top 3 results
+            # Return top 3
             top_results = ranked_products[:3]
 
             return SearchResults(
                 task=search_task,
                 results=top_results,
-                total_found=len(products),  # Total before filtering
+                total_found=len(products),
             )
 
         except Exception as e:

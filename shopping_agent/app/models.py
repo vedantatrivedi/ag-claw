@@ -133,6 +133,14 @@ class SearchResult(BaseModel):
         None,
         description="Stock availability",
     )
+    image_url: Optional[str] = Field(
+        None,
+        description="Product thumbnail image URL",
+    )
+    final_score: Optional[float] = Field(
+        None,
+        description="Computed ranking score (0-100)",
+    )
 
 
 class SearchTask(BaseModel):

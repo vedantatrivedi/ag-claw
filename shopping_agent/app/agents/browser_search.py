@@ -261,11 +261,10 @@ class BrowserSearchAgent:
             return []
 
         try:
-            from browser_use import Agent, Browser, Controller
-            from langchain_openai import ChatOpenAI
+            from browser_use import Agent, BrowserProfile
             from pydantic import BaseModel, Field
 
-            # Define structured output schema for browser-use
+            # Define structured output schema for browser-use (v0.11+)
             class ProductExtraction(BaseModel):
                 """Schema for product extraction from e-commerce site."""
                 products: List[dict] = Field(
@@ -276,29 +275,28 @@ class BrowserSearchAgent:
             site_name = site_config.get("name", site_key)
             site_domain = site_config.get("domain", f"{site_key}.com")
 
-            llm = ChatOpenAI(
-                model=self.model,
-                api_key=Config.OPENAI_API_KEY,
-                base_url=Config.OPENAI_BASE_URL,
+            # Configure browser profile with headless mode
+            browser_profile = BrowserProfile(
+                headless=Config.BROWSER_HEADLESS,  # Run in headless mode (no visible browser)
+                disable_security=True,  # Allow cross-origin for e-commerce sites
             )
 
-            # Configure browser-use controller with structured output
-            controller = Controller(
-                return_type=ProductExtraction  # Forces structured JSON output
-            )
-
+            # Create agent with structured output (browser-use v0.11+ API)
+            # browser-use will auto-detect BROWSER_USE_API_KEY from environment
             agent = Agent(
-                task=f"Go to {site_domain} and search for '{search_query}'. Extract top 5 products with: title (str), url (str), price (float in INR or null), rating (float 0-5 or null), review_count (int or null), in_stock (bool or null).",
-                llm=llm,
-                browser=Browser(headless=Config.BROWSER_HEADLESS),
-                controller=controller,
+                task=f"Go to {site_domain} and search for '{search_query}'. Extract top 5 products with: title (str), url (str), price (float in INR or null), rating (float 0-5 or null), review_count (int or null), in_stock (bool/null).",
+                output_model_schema=ProductExtraction,
+                browser_profile=browser_profile,
             )
 
             # Execute search with timeout
-            result = await asyncio.wait_for(agent.run(), timeout=self.search_timeout)
+            result = await asyncio.wait_for(agent.run(max_steps=10), timeout=self.search_timeout)
 
-            # browser-use returns ProductExtraction object directly
-            products = result.products if hasattr(result, 'products') else []
+            # Extract final result - browser-use v0.11 returns AgentHistoryList
+            # The structured output is in the final result
+            products = []
+            if hasattr(result, 'final_result') and result.final_result:
+                products = result.final_result().get('products', []) if isinstance(result.final_result(), dict) else []
 
             # Convert to SearchResult objects
             return [
@@ -312,9 +310,10 @@ class BrowserSearchAgent:
                     review_count=p.get("review_count"),
                     in_stock=p.get("in_stock")
                 )
-                for p in products[:5]
+                for p in products[:5] if isinstance(p, dict)
             ]
-        except (asyncio.TimeoutError, Exception):
+        except (asyncio.TimeoutError, Exception) as e:
+            # Silent failure - return empty results
             return []
 
     async def _search_async(self, search_task: SearchTask) -> SearchResults:

@@ -30,66 +30,145 @@ console = Console()
 
 
 def _execute_search(orchestrator: ShoppingOrchestrator, plan_items: List[dict]) -> None:
-    """Execute browser search for approved plan items."""
-    from shopping_agent.app.agents.browser_search import BrowserSearchAgent
+    """Execute product search for approved plan items."""
+    import os
 
     items = [PlanItem(**item) for item in plan_items]
-    browser_agent = BrowserSearchAgent()
 
-    if not browser_agent.is_implemented():
-        console.print("\n[yellow]⚠ Browser search not available (browser-use not installed)[/yellow]")
-        console.print("[dim]Install with: poetry add browser-use langchain-openai[/dim]\n")
+    # Try SerpAPI first (3x faster), then fall back to SearchAPI.com
+    search_agent = None
+
+    if os.getenv("SERPAPI_KEY"):
+        try:
+            from shopping_agent.app.agents.serpapi_search import SerpAPISearchAgent
+            search_agent = SerpAPISearchAgent()
+        except ValueError:
+            pass
+
+    if not search_agent and os.getenv("SEARCHAPI_KEY"):
+        try:
+            from shopping_agent.app.agents.searchapi_search import SearchAPISearchAgent
+            search_agent = SearchAPISearchAgent()
+        except ValueError:
+            pass
+
+    if not search_agent:
+        console.print("\n[yellow]⚠ No search API key configured[/yellow]")
+        console.print("[dim]Options:[/dim]")
+        console.print("[dim]  1. SearchAPI.com (recommended): https://www.searchapi.io/[/dim]")
+        console.print("[dim]     Then add to .env: SEARCHAPI_KEY=your_key_here[/dim]")
+        console.print("[dim]  2. SerpAPI: https://serpapi.com/users/sign_up[/dim]")
+        console.print("[dim]     Then add to .env: SERPAPI_KEY=your_key_here[/dim]\n")
         return
 
-    console.print("\n[bold cyan]🔍 Searching for products...[/bold cyan]\n")
-
-    with console.status("[bold green]Searching across Amazon, Flipkart, Myntra, Ajio, Croma..."):
-        search_results = browser_agent.search_multiple(items)
+    with console.status("[bold green]Searching across the web..."):
+        search_results = search_agent.search_multiple(items)
 
     _display_search_results(search_results)
 
 
 def _display_search_results(search_results: List[SearchResults]) -> None:
     """Display search results with rich formatting."""
+    from rich.panel import Panel
+    from rich.columns import Columns
+    from rich import box
+    from rich.console import Group
+
     if not search_results:
         console.print("[yellow]No search results found[/yellow]\n")
         return
 
-    for search_result in search_results:
+    console.print("\n[bold cyan]🎯 Top Ranked Products[/bold cyan]\n")
+
+    for idx, search_result in enumerate(search_results, 1):
         item_desc = search_result.task.plan_item.description
-        console.print(f"\n[bold cyan]📦 {item_desc}[/bold cyan]")
 
         if not search_result.results:
-            console.print("[dim]  No products found[/dim]")
+            console.print(f"[bold yellow]📦 {item_desc}[/bold yellow]")
+            console.print("[dim]  No products found[/dim]\n")
             continue
 
-        table = Table(show_header=True, header_style="bold magenta")
-        table.add_column("Site", style="yellow", width=10)
-        table.add_column("Product", style="cyan", no_wrap=False, width=35)
-        table.add_column("Price", style="green", width=10)
-        table.add_column("Rating", style="yellow", width=10)
-        table.add_column("Reviews", style="dim", width=8)
-        table.add_column("URL", style="blue", no_wrap=False, width=25)
+        console.print(f"[bold yellow]📦 {item_desc}[/bold yellow]")
+        console.print(f"[dim]Found {search_result.total_found} products, showing top {len(search_result.results)} by score[/dim]\n")
 
-        for product in search_result.results[:10]:  # Show top 10 (multi-site)
-            price_str = f"₹{product.price:.0f}" if product.price else "N/A"
-            rating_str = f"⭐{product.rating:.1f}" if product.rating else "N/A"
-            reviews_str = str(product.review_count) if product.review_count else "N/A"
-            url_display = product.url[:25] + "..." if len(product.url) > 25 else product.url
+        # Sort by score (highest first) - should already be sorted but ensure it
+        sorted_products = sorted(search_result.results, key=lambda p: p.final_score or 0, reverse=True)
 
-            table.add_row(
-                product.source,
-                product.title[:35],
-                price_str,
-                rating_str,
-                reviews_str,
-                f"[link={product.url}]{url_display}[/link]"
+        # Create cards for side-by-side display
+        cards = []
+        for rank, product in enumerate(sorted_products, 1):
+            # Truncate title for better display
+            title = product.title[:50] + "..." if len(product.title) > 50 else product.title
+
+            # Build product card content
+            price_str = f"[bold green]₹{product.price:,.0f}[/bold green]" if product.price else "[dim]Price N/A[/dim]"
+
+            # Rating with stars
+            rating_display = ""
+            if product.rating:
+                stars = "⭐" * int(product.rating)
+                rating_display = f"{stars} {product.rating:.1f}"
+                if product.review_count:
+                    if product.review_count >= 1000:
+                        rating_display += f"\n[dim]({product.review_count//1000}K+ reviews)[/dim]"
+                    else:
+                        rating_display += f"\n[dim]({product.review_count} reviews)[/dim]"
+            else:
+                rating_display = "[dim]No ratings[/dim]"
+
+            score_display = f"[bold magenta]Score: {product.final_score:.1f}[/bold magenta]" if product.final_score else ""
+
+            # Image link (clickable)
+            if product.image_url:
+                image_indicator = f"[link={product.image_url}]🖼️  [blue]View Image[/blue][/link]"
+            else:
+                image_indicator = "[dim]No image[/dim]"
+
+            # Build compact card with proper link handling
+            buy_link = ""
+            if product.url:
+                # Clean URL for display
+                if "google.com/search" in product.url:
+                    buy_link = f"[link={product.url}][blue]🔍 View on Google Shopping[/blue][/link]"
+                else:
+                    buy_link = f"[link={product.url}][blue]🛒 Buy on {product.source}[/blue][/link]"
+            else:
+                buy_link = "[dim]Link not available[/dim]"
+
+            card_content = f"""[bold]{title}[/bold]
+
+{price_str}
+
+{rating_display}
+
+{score_display}
+
+{image_indicator}
+
+[yellow]{product.source}[/yellow]
+
+{buy_link}"""
+
+            # Create panel
+            border_color = "green" if rank == 1 else "blue" if rank == 2 else "yellow"
+            panel = Panel(
+                card_content,
+                title=f"[bold white]#{rank}[/bold white]",
+                border_style=border_color,
+                box=box.ROUNDED,
+                padding=(1, 2),
+                width=35,  # Fixed width for consistent layout
             )
+            cards.append(panel)
 
-        console.print(table)
-        console.print(f"[dim]Total found: {search_result.total_found}[/dim]")
+        # Display cards side by side (3 columns)
+        console.print(Columns(cards, equal=True, expand=False))
+        console.print()
 
-    console.print()
+    # Summary
+    console.print("[bold cyan]💳 Ready to purchase?[/bold cyan]")
+    console.print("[dim]Click the 🛒 Buy Now links above to visit the product pages[/dim]")
+    console.print("[dim]💡 Tip: Hold Ctrl/Cmd and click links to open in browser[/dim]\n")
 
 
 @app.command()

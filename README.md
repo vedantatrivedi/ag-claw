@@ -646,8 +646,4 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 **⭐ Star this repo if you find it useful!**
 
-Made with ❤️ by [jinit24](https://github.com/vedantatrivedi)
-
-🤖 Powered by [Claude Code](https://claude.com/claude-code)
-
 </div>

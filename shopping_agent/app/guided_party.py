@@ -156,14 +156,28 @@ def build_placeholder_listing_results(plan: ShoppingPlan) -> List[SearchResults]
     return listing_results
 
 
-def get_curated_listing_results(plan: ShoppingPlan) -> tuple[List[SearchResults], str]:
-    """Search half of items on Amazon, half on Flipkart via Browserbase.
+def _raw_to_search_result(r: dict, source: str) -> SearchResult:
+    return SearchResult(
+        title=r.get("title", ""),
+        url=r.get("url", ""),
+        price=_parse_price(r.get("price", "")),
+        source=source,
+        relevance_score=0.9,
+        rating=_parse_float(r.get("rating", "")),
+        review_count=None,
+        in_stock=True,
+        image_url=r.get("image", ""),
+    )
 
-    For each item we get 2 products, randomly pick 1 as the curated result.
+
+def get_curated_listing_results(plan: ShoppingPlan) -> tuple[List[SearchResults], str]:
+    """For each plan item, search Amazon via Browserbase and return top 1 result.
+
+    All item searches run in parallel for speed.
     Falls back to placeholders if Browserbase is unavailable.
     """
-    import random
     import logging
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     logger = logging.getLogger(__name__)
 
@@ -175,67 +189,37 @@ def get_curated_listing_results(plan: ShoppingPlan) -> tuple[List[SearchResults]
         return build_placeholder_listing_results(plan), "placeholder"
 
     items = plan.items
-    mid = len(items) // 2
-    amazon_items = items[:mid] if mid > 0 else items[:1]
-    flipkart_items = items[mid:] if mid > 0 else items[1:]
 
-    listing_results: List[SearchResults] = []
-
-    # Search Amazon half
-    for item in amazon_items:
-        query = item.search_query or item.description
-        task = SearchTask(plan_item=item, search_query=query, filters={})
+    def _search_amazon_item(idx: int, query: str) -> tuple[int, list[dict]]:
         try:
-            raw = manager.search_amazon(query, max_results=2)
-            results = [
-                SearchResult(
-                    title=r.get("title", ""),
-                    url=r.get("url", ""),
-                    price=_parse_price(r.get("price", "")),
-                    source="Amazon",
-                    relevance_score=0.9,
-                    rating=_parse_float(r.get("rating", "")),
-                    review_count=None,
-                    in_stock=True,
-                    image_url=r.get("image", ""),
-                )
-                for r in raw[:2]
-                if r.get("url")
-            ]
-            if len(results) > 1:
-                results = [random.choice(results)]
-            listing_results.append(SearchResults(task=task, results=results, total_found=len(results)))
+            return idx, manager.search_amazon(query, max_results=2)
         except Exception as exc:
             logger.warning("[curate] Amazon search failed for '%s': %s", query, exc)
-            listing_results.append(SearchResults(task=task, results=[], total_found=0))
+            return idx, []
 
-    # Search Flipkart half
-    for item in flipkart_items:
+    results_by_item: dict[int, list[SearchResult]] = {i: [] for i in range(len(items))}
+
+    max_workers = min(len(items), 5)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_search_amazon_item, i, item.search_query or item.description): i
+            for i, item in enumerate(items)
+        }
+        for future in as_completed(futures):
+            idx, raw = future.result()
+            for r in raw[:2]:
+                if r.get("url"):
+                    results_by_item[idx].append(_raw_to_search_result(r, "Amazon"))
+
+    listing_results: List[SearchResults] = []
+    for i, item in enumerate(items):
         query = item.search_query or item.description
         task = SearchTask(plan_item=item, search_query=query, filters={})
-        try:
-            raw = manager.search_flipkart(query, max_results=2)
-            results = [
-                SearchResult(
-                    title=r.get("title", ""),
-                    url=r.get("url", ""),
-                    price=_parse_price(r.get("price", "")),
-                    source="Flipkart",
-                    relevance_score=0.9,
-                    rating=_parse_float(r.get("rating", "")),
-                    review_count=None,
-                    in_stock=True,
-                    image_url=r.get("image", ""),
-                )
-                for r in raw[:2]
-                if r.get("url")
-            ]
-            if len(results) > 1:
-                results = [random.choice(results)]
-            listing_results.append(SearchResults(task=task, results=results, total_found=len(results)))
-        except Exception as exc:
-            logger.warning("[curate] Flipkart search failed for '%s': %s", query, exc)
-            listing_results.append(SearchResults(task=task, results=[], total_found=0))
+        listing_results.append(SearchResults(
+            task=task,
+            results=results_by_item[i],
+            total_found=len(results_by_item[i]),
+        ))
 
     return listing_results, "browserbase"
 
@@ -282,31 +266,15 @@ def select_top_product_urls(listing_results: List[SearchResults]) -> List[str]:
 
 
 def add_urls_to_browserbase_cart(urls: List[str]) -> dict:
-    """Add selected URLs to cart, routing Amazon and Flipkart URLs separately."""
+    """Add Amazon URLs to cart via Browserbase."""
     from shopping_agent.app.tools.browserbase import BrowserbaseManager
 
     amazon_urls = [u for u in urls if _is_amazon_url(u)]
-    flipkart_urls = [u for u in urls if _is_flipkart_url(u)]
-
-    if not amazon_urls and not flipkart_urls:
-        raise ValueError("No Amazon or Flipkart URLs provided — cannot add to cart")
+    if not amazon_urls:
+        raise ValueError("No Amazon URLs provided — cannot add to cart")
 
     manager = BrowserbaseManager()
-    all_items: list[dict] = []
-    cart_screenshot = ""
-
-    if amazon_urls:
-        result = manager.add_to_cart(amazon_urls)
-        all_items.extend(result.get("items", []))
-        cart_screenshot = result.get("cart_screenshot", "")
-
-    if flipkart_urls:
-        result = manager.add_to_cart_flipkart(flipkart_urls)
-        all_items.extend(result.get("items", []))
-        if not cart_screenshot:
-            cart_screenshot = result.get("cart_screenshot", "")
-
-    return {"items": all_items, "cart_screenshot": cart_screenshot}
+    return manager.add_to_cart(amazon_urls)
 
 
 def budget_inr_to_paisa(budget_inr: float) -> int:

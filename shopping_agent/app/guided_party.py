@@ -5,6 +5,7 @@ Helpers for the guided party-planning flow.
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from typing import Dict, List, Optional
@@ -153,6 +154,44 @@ def build_placeholder_listing_results(plan: ShoppingPlan) -> List[SearchResults]
         )
 
     return listing_results
+
+
+def get_curated_listing_results(plan: ShoppingPlan) -> tuple[List[SearchResults], str]:
+    """Return real curated results when search keys are configured, otherwise placeholders."""
+    if os.getenv("SERPAPI_KEY"):
+        try:
+            from shopping_agent.app.agents.serpapi_search import SerpAPISearchAgent
+
+            return SerpAPISearchAgent().search_multiple(plan.items), "serpapi"
+        except Exception:
+            pass
+
+    if os.getenv("SEARCHAPI_KEY"):
+        try:
+            from shopping_agent.app.agents.searchapi_search import SearchAPISearchAgent
+
+            return SearchAPISearchAgent().search_multiple(plan.items), "searchapi"
+        except Exception:
+            pass
+
+    return build_placeholder_listing_results(plan), "placeholder"
+
+
+def select_top_product_urls(listing_results: List[SearchResults]) -> List[str]:
+    """Select the top-ranked product URL for each curated item."""
+    urls: List[str] = []
+    for result in listing_results:
+        if result.results and result.results[0].url:
+            urls.append(result.results[0].url)
+    return urls
+
+
+def add_urls_to_browserbase_cart(urls: List[str]) -> dict:
+    """Add selected URLs to cart using the existing Browserbase manager."""
+    from shopping_agent.app.tools.browserbase import BrowserbaseManager
+
+    manager = BrowserbaseManager()
+    return manager.add_to_cart(urls)
 
 
 def budget_inr_to_paisa(budget_inr: float) -> int:

@@ -12,9 +12,11 @@ from shopping_agent.app.agents.planner import PlannerAgent
 from shopping_agent.app.guided_party import (
     DEFAULT_PARTY_QUESTIONS,
     PreferenceQuestionAgent,
+    add_urls_to_browserbase_cart,
     build_guided_request,
-    build_placeholder_listing_results,
     budget_inr_to_paisa,
+    get_curated_listing_results,
+    select_top_product_urls,
 )
 from shopping_agent.app.models import GuidedPartyPlanResult, ShoppingPlan
 from shopping_agent.app.tools.pinelabs import create_budget_preauth, get_preauth_status
@@ -118,7 +120,8 @@ class GuidedPartyWorkflow:
 
         plan_dict = planner_response.data.get("plan", {})
         plan = ShoppingPlan(**plan_dict)
-        listing_results = build_placeholder_listing_results(plan)
+        listing_results, curation_mode = get_curated_listing_results(plan)
+        selected_product_urls = select_top_product_urls(listing_results)
 
         result = GuidedPartyPlanResult(
             preferences_asked=list(preferences_answers.keys()),
@@ -130,12 +133,62 @@ class GuidedPartyWorkflow:
             },
             plan=plan.model_dump(),
             planner_metadata=planner_response.metadata,
+            curation_mode=curation_mode,
             listing_results=listing_results,
+            selected_product_urls=selected_product_urls,
         )
         return {
             "success": True,
             **result.model_dump(),
             "listing_results": [entry.model_dump() for entry in listing_results],
+        }
+
+    def add_to_cart(
+        self,
+        *,
+        listing_results: List[Dict],
+        selected_urls: Optional[List[str]] = None,
+    ) -> Dict:
+        """Add curated products to Amazon cart using Browserbase."""
+        urls = selected_urls or []
+        if not urls:
+            from shopping_agent.app.models import SearchResults
+
+            normalized_results = []
+            for entry in listing_results:
+                normalized_results.append(
+                    entry if isinstance(entry, SearchResults) else SearchResults(**entry)
+                )
+            urls = select_top_product_urls(normalized_results)
+
+        if not urls:
+            return {
+                "success": False,
+                "stage": "cart",
+                "error": "No curated product URLs available to add to cart",
+            }
+        if any("placeholder.local" in url for url in urls):
+            return {
+                "success": False,
+                "stage": "cart",
+                "error": "Cart add requires real curated product URLs, not placeholder results",
+                "selected_product_urls": urls,
+            }
+
+        try:
+            cart_result = add_urls_to_browserbase_cart(urls)
+        except Exception as exc:
+            return {
+                "success": False,
+                "stage": "cart",
+                "error": str(exc),
+                "selected_product_urls": urls,
+            }
+
+        return {
+            "success": True,
+            "selected_product_urls": urls,
+            "cart": cart_result,
         }
 
     def run(

@@ -186,4 +186,7 @@ class GuidedPartyPlanResult(BaseModel):
     preauth: dict = Field(default_factory=dict)
     plan: dict = Field(default_factory=dict)
     planner_metadata: dict = Field(default_factory=dict)
+    curation_mode: str = Field(default="placeholder")
     listing_results: List[SearchResults] = Field(default_factory=list)
+    selected_product_urls: List[str] = Field(default_factory=list)
+    cart: dict = Field(default_factory=dict)

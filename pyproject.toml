@@ -1,0 +1,45 @@
+[tool.poetry]
+name = "shopping-agent"
+version = "0.1.0"
+description = "Multi-agent shopping intent system using OpenAI Agents SDK"
+authors = ["jinit24"]
+readme = "README.md"
+packages = [{include = "shopping_agent"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+openai = "^1.54.0"
+pydantic = "^2.9.0"
+python-dotenv = "^1.0.1"
+rich = "^13.9.0"
+typer = "^0.12.0"
+browser-use = "^0.1.0"
+langchain-openai = "^0.2.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-asyncio = "^0.24.0"
+black = "^24.10.0"
+mypy = "^1.13.0"
+ruff = "^0.7.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+shopping-agent = "shopping_agent.app.main:app"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🛒 Shopping Agent
+# 🤖 ag-claw
 
-**AI-Powered Multi-Agent Shopping System**
+**Smart Shopping with AI Agents**
 
 [![CI](https://github.com/vedantatrivedi/ag-claw/workflows/CI/badge.svg)](https://github.com/vedantatrivedi/ag-claw/actions)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)

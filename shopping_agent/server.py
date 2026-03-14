@@ -6,6 +6,7 @@ Usage:
 """
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -21,6 +22,14 @@ from shopping_agent.app.agents.serpapi_search import SerpAPISearchAgent
 from shopping_agent.app.models import PlanItem
 
 app = FastAPI(title="Shopping Agent API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def get_manager():
@@ -146,6 +155,18 @@ class GuidedPartyCartRequest(BaseModel):
 class GuidedPartyCartResponse(BaseModel):
     selected_product_urls: list[str]
     cart: dict
+
+
+class GuidedPartyCaptureRequest(BaseModel):
+    order_id: str = Field(..., description="Pre-auth order ID to capture")
+    capture_amount_paisa: int = Field(..., gt=0, description="Amount to capture in paisa")
+
+
+class GuidedPartyCaptureResponse(BaseModel):
+    order_id: str
+    captured_amount_paisa: int
+    capture_status: Optional[str] = None
+    final_order_status: Optional[str] = None
 
 
 # Browserbase endpoints
@@ -369,6 +390,26 @@ def guided_party_cart(req: GuidedPartyCartRequest):
     return GuidedPartyCartResponse(
         selected_product_urls=result.get("selected_product_urls", []),
         cart=result.get("cart", {}),
+    )
+
+
+@app.post("/guided-party/capture", response_model=GuidedPartyCaptureResponse)
+def guided_party_capture(req: GuidedPartyCaptureRequest):
+    """Capture the pre-authorized payment after cart is confirmed."""
+    orchestrator = ShoppingOrchestrator()
+    result = orchestrator.capture_guided_party_payment(
+        order_id=req.order_id,
+        capture_amount_paisa=req.capture_amount_paisa,
+    )
+
+    if not result.get("success", False):
+        raise HTTPException(status_code=500, detail=result.get("error", "Payment capture failed"))
+
+    return GuidedPartyCaptureResponse(
+        order_id=result["order_id"],
+        captured_amount_paisa=result["captured_amount_paisa"],
+        capture_status=result.get("capture_status"),
+        final_order_status=result.get("final_order_status"),
     )
 
 

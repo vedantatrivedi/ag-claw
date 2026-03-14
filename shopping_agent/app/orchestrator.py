@@ -188,6 +188,18 @@ class ShoppingOrchestrator:
             apply_postprocessing=apply_postprocessing,
         )
 
+    def capture_guided_party_payment(
+        self,
+        *,
+        order_id: str,
+        capture_amount_paisa: int,
+    ) -> Dict[str, Any]:
+        """Capture the pre-authorized payment."""
+        return self.guided_party_workflow.capture_payment(
+            order_id=order_id,
+            capture_amount_paisa=capture_amount_paisa,
+        )
+
     def add_guided_party_items_to_cart(
         self,
         *,

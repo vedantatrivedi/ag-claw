@@ -19,7 +19,7 @@ from shopping_agent.app.guided_party import (
     select_top_product_urls,
 )
 from shopping_agent.app.models import GuidedPartyPlanResult, ShoppingPlan
-from shopping_agent.app.tools.pinelabs import create_budget_preauth, get_preauth_status
+from shopping_agent.app.tools.pinelabs import create_budget_preauth, capture_preauth, get_preauth_status
 
 
 class GuidedPartyWorkflow:
@@ -150,7 +150,11 @@ class GuidedPartyWorkflow:
         selected_urls: Optional[List[str]] = None,
     ) -> Dict:
         """Add curated products to Amazon cart using Browserbase."""
+        import logging
+        logger = logging.getLogger(__name__)
+
         urls = selected_urls or []
+        logger.warning("[cart] selected_urls received: %s", urls)
         if not urls:
             from shopping_agent.app.models import SearchResults
 
@@ -175,9 +179,12 @@ class GuidedPartyWorkflow:
                 "selected_product_urls": urls,
             }
 
+        logger.warning("[cart] URLs going to browserbase: %s", urls)
         try:
             cart_result = add_urls_to_browserbase_cart(urls)
+            logger.warning("[cart] browserbase result: %s", cart_result)
         except Exception as exc:
+            logger.warning("[cart] browserbase exception: %s", exc)
             return {
                 "success": False,
                 "stage": "cart",
@@ -189,6 +196,35 @@ class GuidedPartyWorkflow:
             "success": True,
             "selected_product_urls": urls,
             "cart": cart_result,
+        }
+
+    def capture_payment(
+        self,
+        *,
+        order_id: str,
+        capture_amount_paisa: int,
+    ) -> Dict:
+        """Capture the pre-authorized payment after cart is confirmed."""
+        try:
+            result = capture_preauth(
+                order_id=order_id,
+                capture_amount_paisa=capture_amount_paisa,
+                wait_for_authorized=False,
+            )
+        except Exception as exc:
+            return {
+                "success": False,
+                "stage": "capture",
+                "error": str(exc),
+                "order_id": order_id,
+            }
+
+        return {
+            "success": True,
+            "order_id": order_id,
+            "captured_amount_paisa": capture_amount_paisa,
+            "capture_status": result.get("capture_status"),
+            "final_order_status": result.get("final_order_status"),
         }
 
     def run(

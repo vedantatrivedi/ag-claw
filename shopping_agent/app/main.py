@@ -539,9 +539,43 @@ def guided_party(
     console.print("[bold green]Shopping Plan:[/bold green]\n")
     _display_plan(result.get("plan", {}))
 
-    console.print("\n[bold cyan]Placeholder Listing Results:[/bold cyan]\n")
+    curation_mode = result.get("curation_mode", "placeholder")
+    label = "Curated Product Results" if curation_mode != "placeholder" else "Placeholder Listing Results"
+    console.print(f"\n[bold cyan]{label}:[/bold cyan]\n")
     listing_results = [SearchResults(**entry) for entry in result.get("listing_results", [])]
     _display_search_results(listing_results)
+
+    selected_urls = result.get("selected_product_urls", [])
+    if curation_mode == "placeholder":
+        console.print("[yellow]Real search is not configured, so cart add is unavailable for placeholder results.[/yellow]")
+        raise typer.Exit(code=0)
+
+    if not selected_urls:
+        console.print("[yellow]No curated product URLs available for cart addition.[/yellow]")
+        raise typer.Exit(code=0)
+
+    if not Confirm.ask("[bold cyan]Add the top curated result for each item to cart?[/bold cyan]", default=False):
+        console.print("[yellow]Stopped after curation review.[/yellow]")
+        raise typer.Exit(code=0)
+
+    console.print("\n[bold cyan]Adding curated items to cart...[/bold cyan]")
+    cart_result = orchestrator.add_guided_party_items_to_cart(
+        listing_results=result.get("listing_results", []),
+        selected_urls=selected_urls,
+    )
+
+    if not cart_result.get("success"):
+        console.print(f"[bold red]Error:[/bold red] {cart_result.get('error')}")
+        raise typer.Exit(code=1)
+
+    cart = cart_result.get("cart", {})
+    console.print("\n[bold green]Items added to cart[/bold green]")
+    statuses = cart.get("items", [])
+    for status in statuses:
+        state = "added" if status.get("success") else "failed"
+        console.print(f"[dim]{state}:[/dim] {status.get('title') or status.get('url')}")
+    if cart.get("cart_screenshot"):
+        console.print("[dim]Cart screenshot captured in response payload.[/dim]")
 
 
 @app.command()

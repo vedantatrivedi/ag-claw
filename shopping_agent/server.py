@@ -88,6 +88,66 @@ class SerpSearchResponse(BaseModel):
     results: list[SerpSearchResults]
 
 
+# Guided party flow endpoints
+class GuidedPartyQuestionRequest(BaseModel):
+    request: str = Field(..., min_length=1, description="Broad party-planning request")
+
+
+class GuidedPartyQuestionResponse(BaseModel):
+    questions: list[str]
+
+
+class GuidedPartyPreauthRequest(BaseModel):
+    request: str = Field(..., min_length=1, description="Original party-planning request")
+    preferences_answers: dict[str, str] = Field(
+        ...,
+        min_length=1,
+        description="Collected answers keyed by question",
+    )
+    budget_inr: float = Field(..., gt=0, description="Approved budget in INR")
+
+
+class GuidedPartyPreauthResponse(BaseModel):
+    request: str
+    preferences_answers: dict[str, str]
+    budget_inr: float
+    preauth: dict
+
+
+class GuidedPartyCompleteRequest(BaseModel):
+    request: str = Field(..., min_length=1, description="Original party-planning request")
+    preferences_answers: dict[str, str] = Field(
+        ...,
+        min_length=1,
+        description="Collected answers keyed by question",
+    )
+    budget_inr: float = Field(..., gt=0, description="Approved budget in INR")
+    preauth: dict = Field(..., description="Preauth response from the creation step")
+    postprocess: bool = Field(default=True, description="Apply post-processing to clean up plan")
+
+
+class GuidedPartyCompleteResponse(BaseModel):
+    preferences_asked: list[str]
+    preferences_answers: dict[str, str]
+    budget_inr: float
+    preauth: dict
+    plan: dict
+    planner_metadata: dict
+    curation_mode: str
+    listing_results: list[dict]
+    selected_product_urls: list[str]
+
+
+class GuidedPartyCartRequest(BaseModel):
+    listing_results: list[dict] = Field(..., min_length=1, description="Curated listing results from the completion step")
+    selected_urls: list[str] = Field(default_factory=list, description="Explicit curated URLs to add to cart")
+
+
+class GuidedPartyCartResponse(BaseModel):
+    selected_product_urls: list[str]
+    cart: dict
+
+
 # Browserbase endpoints
 class StartLoginRequest(BaseModel):
     timeout: int = Field(default=900, description="Session timeout in seconds")
@@ -211,6 +271,80 @@ def search_serp(req: SerpSearchRequest):
     return SerpSearchResponse(
         count=len(formatted_results),
         results=formatted_results
+    )
+
+
+@app.post("/guided-party/questions", response_model=GuidedPartyQuestionResponse)
+def guided_party_questions(req: GuidedPartyQuestionRequest):
+    """Generate guided party preference questions from an initial broad request."""
+    orchestrator = ShoppingOrchestrator()
+    questions = orchestrator.generate_guided_party_questions(req.request)
+    return GuidedPartyQuestionResponse(questions=questions)
+
+
+@app.post("/guided-party/preauth", response_model=GuidedPartyPreauthResponse)
+def guided_party_preauth(req: GuidedPartyPreauthRequest):
+    """Create a Pine Labs preauth and return the redirect URL for manual authorization."""
+    orchestrator = ShoppingOrchestrator()
+    result = orchestrator.create_guided_party_preauth(
+        preferences_answers=req.preferences_answers,
+        budget_inr=req.budget_inr,
+    )
+
+    if not result.get("success", False):
+        raise HTTPException(status_code=500, detail=result.get("error", "Preauth creation failed"))
+
+    return GuidedPartyPreauthResponse(
+        request=req.request,
+        preferences_answers=req.preferences_answers,
+        budget_inr=req.budget_inr,
+        preauth=result["preauth"],
+    )
+
+
+@app.post("/guided-party/complete", response_model=GuidedPartyCompleteResponse)
+def guided_party_complete(req: GuidedPartyCompleteRequest):
+    """Finish the guided party flow after the user authorizes the preauth."""
+    orchestrator = ShoppingOrchestrator()
+    result = orchestrator.complete_guided_party_after_authorization(
+        user_request=req.request,
+        preferences_answers=req.preferences_answers,
+        budget_inr=req.budget_inr,
+        preauth=req.preauth,
+        apply_postprocessing=req.postprocess,
+    )
+
+    if not result.get("success", False):
+        raise HTTPException(status_code=500, detail=result.get("error", "Guided party completion failed"))
+
+    return GuidedPartyCompleteResponse(
+        preferences_asked=result.get("preferences_asked", []),
+        preferences_answers=result.get("preferences_answers", {}),
+        budget_inr=result.get("budget_inr", req.budget_inr),
+        preauth=result.get("preauth", {}),
+        plan=result.get("plan", {}),
+        planner_metadata=result.get("planner_metadata", {}),
+        curation_mode=result.get("curation_mode", "placeholder"),
+        listing_results=result.get("listing_results", []),
+        selected_product_urls=result.get("selected_product_urls", []),
+    )
+
+
+@app.post("/guided-party/cart", response_model=GuidedPartyCartResponse)
+def guided_party_cart(req: GuidedPartyCartRequest):
+    """Add selected or top-ranked curated guided-party products to Amazon cart."""
+    orchestrator = ShoppingOrchestrator()
+    result = orchestrator.add_guided_party_items_to_cart(
+        listing_results=req.listing_results,
+        selected_urls=req.selected_urls or None,
+    )
+
+    if not result.get("success", False):
+        raise HTTPException(status_code=500, detail=result.get("error", "Cart add failed"))
+
+    return GuidedPartyCartResponse(
+        selected_product_urls=result.get("selected_product_urls", []),
+        cart=result.get("cart", {}),
     )
 
 

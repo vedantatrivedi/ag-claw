@@ -188,6 +188,18 @@ class ShoppingOrchestrator:
             apply_postprocessing=apply_postprocessing,
         )
 
+    def add_guided_party_items_to_cart(
+        self,
+        *,
+        listing_results: list[dict],
+        selected_urls: Optional[list[str]] = None,
+    ) -> Dict[str, Any]:
+        """Add selected or top-ranked guided-party items to cart."""
+        return self.guided_party_workflow.add_to_cart(
+            listing_results=listing_results,
+            selected_urls=selected_urls,
+        )
+
     def get_agent_info(self) -> Dict[str, Any]:
         """
         Get information about all agents.

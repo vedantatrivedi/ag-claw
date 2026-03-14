@@ -5,6 +5,7 @@ Run with: pytest shopping_agent/tests/test_api_endpoints.py -v
 """
 
 import pytest
+from unittest import mock
 from fastapi.testclient import TestClient
 from shopping_agent.server import app
 
@@ -273,6 +274,256 @@ class TestErrorHandling:
         )
         # FastAPI should still handle it
         assert response.status_code in [200, 422]
+
+
+class TestGuidedPartyEndpoints:
+    """Tests for the guided-party API flow."""
+
+    def test_guided_party_questions_endpoint(self):
+        with mock.patch(
+            "shopping_agent.server.ShoppingOrchestrator.generate_guided_party_questions",
+            return_value=[
+                "What theme or characters does he like?",
+                "Anything he dislikes or should we avoid?",
+                "What is his favorite color?",
+                "How many guests are expected?",
+            ],
+        ) as questions_mock:
+            response = client.post(
+                "/guided-party/questions",
+                json={"request": "It's my son's birthday tomorrow, I want to plan a themed party"},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["questions"][0] == "What theme or characters does he like?"
+        questions_mock.assert_called_once()
+
+    def test_guided_party_preauth_endpoint(self):
+        with mock.patch(
+            "shopping_agent.server.ShoppingOrchestrator.create_guided_party_preauth",
+            return_value={
+                "success": True,
+                "preauth": {
+                    "order_id": "ord_123",
+                    "status": "CREATED",
+                    "redirect_url": "https://checkout.example.com/ord_123",
+                    "budget_paisa": 1500000,
+                },
+            },
+        ) as preauth_mock:
+            response = client.post(
+                "/guided-party/preauth",
+                json={
+                    "request": "It's my son's birthday tomorrow, I want to plan a themed party",
+                    "preferences_answers": {
+                        "What theme or characters does he like?": "Spider-Man",
+                        "Anything he dislikes or should we avoid?": "No scary themes",
+                    },
+                    "budget_inr": 15000,
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["preauth"]["order_id"] == "ord_123"
+        assert data["preauth"]["redirect_url"] == "https://checkout.example.com/ord_123"
+        preauth_mock.assert_called_once_with(
+            preferences_answers={
+                "What theme or characters does he like?": "Spider-Man",
+                "Anything he dislikes or should we avoid?": "No scary themes",
+            },
+            budget_inr=15000,
+        )
+
+    def test_guided_party_complete_endpoint(self):
+        with mock.patch(
+            "shopping_agent.server.ShoppingOrchestrator.complete_guided_party_after_authorization",
+            return_value={
+                "success": True,
+                "preferences_asked": [
+                    "What theme or characters does he like?",
+                    "What is his favorite color?",
+                ],
+                "preferences_answers": {
+                    "What theme or characters does he like?": "Spider-Man",
+                    "What is his favorite color?": "Blue",
+                },
+                "budget_inr": 15000.0,
+                "preauth": {
+                    "order_id": "ord_123",
+                    "status": "CREATED",
+                    "authorized_status": "AUTHORIZED",
+                    "redirect_url": "https://checkout.example.com/ord_123",
+                },
+                "plan": {
+                    "items": [
+                        {
+                            "description": "Spider-Man themed birthday banner",
+                            "quantity": 1,
+                            "intent": "Main party decoration",
+                            "required": True,
+                            "search_hints": ["Spider-Man", "banner"],
+                            "constraints": [],
+                            "search_query": "spider man birthday banner",
+                            "preferred_sites": ["amazon", "flipkart"],
+                        }
+                    ],
+                    "assumptions": ["Indoor party"],
+                    "clarifications_needed": [],
+                },
+                "planner_metadata": {
+                    "model": "test-model",
+                    "tokens_used": 42,
+                },
+                "curation_mode": "serpapi",
+                "listing_results": [
+                    {
+                        "task": {
+                            "plan_item": {
+                                "description": "Spider-Man themed birthday banner",
+                                "quantity": 1,
+                                "intent": "Main party decoration",
+                                "required": True,
+                                "search_hints": ["Spider-Man", "banner"],
+                                "constraints": [],
+                                "search_query": "spider man birthday banner",
+                                "preferred_sites": ["amazon", "flipkart"],
+                            },
+                            "search_query": "spider man birthday banner",
+                            "filters": {"placeholder": True},
+                        },
+                        "results": [
+                            {
+                                "title": "Placeholder match for Spider-Man themed birthday banner",
+                                "url": "https://placeholder.local/products/spider-man-themed-birthday-banner",
+                                "price": None,
+                                "source": "placeholder",
+                                "relevance_score": 0.5,
+                                "rating": None,
+                                "review_count": None,
+                                "in_stock": True,
+                            }
+                        ],
+                        "total_found": 1,
+                    }
+                ],
+                "selected_product_urls": [
+                    "https://placeholder.local/products/spider-man-themed-birthday-banner"
+                ],
+            },
+        ) as complete_mock:
+            response = client.post(
+                "/guided-party/complete",
+                json={
+                    "request": "It's my son's birthday tomorrow, I want to plan a themed party",
+                    "preferences_answers": {
+                        "What theme or characters does he like?": "Spider-Man",
+                        "What is his favorite color?": "Blue",
+                    },
+                    "budget_inr": 15000,
+                    "preauth": {
+                        "order_id": "ord_123",
+                        "status": "CREATED",
+                        "redirect_url": "https://checkout.example.com/ord_123",
+                    },
+                    "postprocess": True,
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["preauth"]["authorized_status"] == "AUTHORIZED"
+        assert data["curation_mode"] == "serpapi"
+        assert data["plan"]["items"][0]["description"] == "Spider-Man themed birthday banner"
+        assert data["listing_results"][0]["results"][0]["source"] == "placeholder"
+        assert data["selected_product_urls"] == [
+            "https://placeholder.local/products/spider-man-themed-birthday-banner"
+        ]
+        complete_mock.assert_called_once_with(
+            user_request="It's my son's birthday tomorrow, I want to plan a themed party",
+            preferences_answers={
+                "What theme or characters does he like?": "Spider-Man",
+                "What is his favorite color?": "Blue",
+            },
+            budget_inr=15000,
+            preauth={
+                "order_id": "ord_123",
+                "status": "CREATED",
+                "redirect_url": "https://checkout.example.com/ord_123",
+            },
+            apply_postprocessing=True,
+        )
+
+    def test_guided_party_cart_endpoint(self):
+        listing_results = [
+            {
+                "task": {
+                    "plan_item": {
+                        "description": "Spider-Man themed birthday banner",
+                        "quantity": 1,
+                        "intent": "Main party decoration",
+                        "required": True,
+                        "search_hints": ["Spider-Man", "banner"],
+                        "constraints": [],
+                        "search_query": "spider man birthday banner",
+                        "preferred_sites": ["amazon", "flipkart"],
+                    },
+                    "search_query": "spider man birthday banner",
+                    "filters": {},
+                },
+                "results": [
+                    {
+                        "title": "Spider-Man Birthday Banner",
+                        "url": "https://amazon.in/dp/TEST123456",
+                        "price": 499.0,
+                        "source": "Amazon",
+                        "relevance_score": 0.9,
+                        "rating": 4.5,
+                        "review_count": 100,
+                        "in_stock": True,
+                        "image_url": "https://example.com/banner.jpg",
+                        "final_score": 91.0,
+                    }
+                ],
+                "total_found": 1,
+            }
+        ]
+
+        with mock.patch(
+            "shopping_agent.server.ShoppingOrchestrator.add_guided_party_items_to_cart",
+            return_value={
+                "success": True,
+                "selected_product_urls": ["https://amazon.in/dp/TEST123456"],
+                "cart": {
+                    "items": [
+                        {
+                            "url": "https://amazon.in/dp/TEST123456",
+                            "title": "Spider-Man Birthday Banner",
+                            "image": "https://example.com/banner.jpg",
+                            "success": True,
+                            "message": "Added (cart: 1)",
+                        }
+                    ],
+                    "cart_screenshot": "base64png",
+                },
+            },
+        ) as cart_mock:
+            response = client.post(
+                "/guided-party/cart",
+                json={
+                    "listing_results": listing_results,
+                    "selected_urls": ["https://amazon.in/dp/TEST123456"],
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["selected_product_urls"] == ["https://amazon.in/dp/TEST123456"]
+        assert data["cart"]["items"][0]["success"] is True
+        cart_mock.assert_called_once_with(
+            listing_results=listing_results,
+            selected_urls=["https://amazon.in/dp/TEST123456"],
+        )
 
 
 @pytest.mark.integration

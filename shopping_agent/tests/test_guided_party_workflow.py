@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest import mock
 
-from shopping_agent.app.models import AgentResponse
+from shopping_agent.app.models import AgentResponse, SearchResults
 from shopping_agent.app.workflows.guided_party_workflow import GuidedPartyWorkflow
 
 
@@ -123,8 +123,10 @@ def test_guided_party_workflow_runs_full_flow_without_browser_search() -> None:
     assert result["budget_inr"] == 15000.0
     assert result["preauth"]["order_id"] == "ord_123"
     assert result["preauth"]["authorized_status"] == "AUTHORIZED"
+    assert result["curation_mode"] == "placeholder"
     assert len(result["plan"]["items"]) == 2
     assert len(result["listing_results"]) == 2
+    assert len(result["selected_product_urls"]) == 2
     assert result["listing_results"][0]["results"][0]["source"] == "placeholder"
     assert result["listing_results"][0]["results"][0]["title"] == (
         "Placeholder match for Spider-Man themed birthday banner"
@@ -205,3 +207,92 @@ def test_guided_party_questions_fall_back_to_default_when_agent_returns_none() -
         "What is his favorite color?",
         "How many guests are expected?",
     ]
+
+
+def test_guided_party_workflow_uses_real_curation_when_search_agent_available() -> None:
+    workflow = GuidedPartyWorkflow(
+        planner=StubPlanner(_planner_success_response()),
+        question_agent=StubQuestionAgent(QUESTIONS),
+    )
+
+    curated_results = [
+        SearchResults.model_validate(
+            {
+                "task": {
+                    "plan_item": _planner_success_response().data["plan"]["items"][0],
+                    "search_query": "spider man birthday banner blue",
+                    "filters": {},
+                },
+                "results": [
+                    {
+                        "title": "Spider-Man Birthday Banner",
+                        "url": "https://amazon.in/dp/TEST123456",
+                        "price": 499.0,
+                        "source": "Amazon",
+                        "relevance_score": 0.9,
+                        "rating": 4.5,
+                        "review_count": 100,
+                        "in_stock": True,
+                        "image_url": "https://example.com/banner.jpg",
+                        "final_score": 91.0,
+                    }
+                ],
+                "total_found": 1,
+            }
+        )
+    ]
+
+    with mock.patch(
+        "shopping_agent.app.workflows.guided_party_workflow.get_preauth_status",
+        return_value={"success": True, "order_id": "ord_123", "status": "AUTHORIZED"},
+    ), mock.patch(
+        "shopping_agent.app.workflows.guided_party_workflow.get_curated_listing_results",
+        return_value=(curated_results, "serpapi"),
+    ):
+        result = workflow.complete_after_authorization(
+            user_request=REQUEST,
+            preferences_answers=ANSWERS,
+            budget_inr=15000.0,
+            preauth={
+                "success": True,
+                "order_id": "ord_123",
+                "status": "CREATED",
+                "redirect_url": "https://checkout.example.com/ord_123",
+                "budget_paisa": 1500000,
+            },
+        )
+
+    assert result["success"] is True
+    assert result["curation_mode"] == "serpapi"
+    assert result["selected_product_urls"] == ["https://amazon.in/dp/TEST123456"]
+
+
+def test_guided_party_workflow_adds_selected_urls_to_cart() -> None:
+    workflow = GuidedPartyWorkflow(
+        planner=StubPlanner(_planner_success_response()),
+        question_agent=StubQuestionAgent(QUESTIONS),
+    )
+
+    with mock.patch(
+        "shopping_agent.app.workflows.guided_party_workflow.add_urls_to_browserbase_cart",
+        return_value={
+            "items": [
+                {
+                    "url": "https://amazon.in/dp/TEST123456",
+                    "title": "Spider-Man Birthday Banner",
+                    "image": "https://example.com/banner.jpg",
+                    "success": True,
+                    "message": "Added (cart: 1)",
+                }
+            ],
+            "cart_screenshot": "base64png",
+        },
+    ):
+        result = workflow.add_to_cart(
+            listing_results=[],
+            selected_urls=["https://amazon.in/dp/TEST123456"],
+        )
+
+    assert result["success"] is True
+    assert result["selected_product_urls"] == ["https://amazon.in/dp/TEST123456"]
+    assert result["cart"]["items"][0]["success"] is True

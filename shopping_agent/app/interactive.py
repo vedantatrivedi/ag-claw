@@ -206,6 +206,46 @@ def prompt_for_budget() -> Optional[float]:
     return None
 
 
+def prompt_for_required_budget() -> float:
+    """
+    Prompt until a valid budget is provided.
+
+    Returns:
+        Budget amount in INR
+    """
+    while True:
+        budget_str = Prompt.ask("\n[bold]Approved budget in INR[/bold]")
+        try:
+            budget = float(budget_str)
+        except ValueError:
+            console.print("[yellow]Enter a numeric budget amount[/yellow]")
+            continue
+
+        if budget <= 0:
+            console.print("[yellow]Budget must be greater than zero[/yellow]")
+            continue
+
+        return budget
+
+
+def gather_guided_preferences(questions: List[str]) -> Dict[str, str]:
+    """
+    Ask a fixed sequence of guided preference questions.
+
+    Args:
+        questions: Questions to ask
+
+    Returns:
+        Mapping of question to answer
+    """
+    answers: Dict[str, str] = {}
+    for idx, question in enumerate(questions, 1):
+        console.print(f"[cyan]{idx}. {question}[/cyan]")
+        answers[question] = Prompt.ask("   [dim]Answer[/dim]").strip()
+        console.print()
+    return answers
+
+
 def prompt_for_quantity() -> Optional[int]:
     """
     Prompt user for quantity if applicable.

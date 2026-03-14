@@ -2,7 +2,7 @@
 Pydantic models for structured data throughout the shopping agent system.
 """
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -86,6 +86,25 @@ class ShoppingPlan(BaseModel):
         return v
 
 
+class PreferenceQuestions(BaseModel):
+    """Structured question set for guided party planning."""
+
+    questions: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=6,
+        description="Preference questions to ask before budget collection",
+    )
+
+    @field_validator("questions")
+    @classmethod
+    def validate_questions(cls, v: List[str]) -> List[str]:
+        cleaned = [question.strip() for question in v if question and question.strip()]
+        if not cleaned:
+            raise ValueError("At least one preference question is required")
+        return cleaned[:6]
+
+
 class SearchResult(BaseModel):
     """A single product search result."""
 
@@ -156,3 +175,15 @@ class AgentResponse(BaseModel):
         default_factory=dict,
         description="Additional metadata (timing, tokens used, etc.)",
     )
+
+
+class GuidedPartyPlanResult(BaseModel):
+    """Final result for the guided party-planning flow."""
+
+    preferences_asked: List[str] = Field(default_factory=list)
+    preferences_answers: Dict[str, str] = Field(default_factory=dict)
+    budget_inr: float = Field(..., ge=0.0)
+    preauth: dict = Field(default_factory=dict)
+    plan: dict = Field(default_factory=dict)
+    planner_metadata: dict = Field(default_factory=dict)
+    listing_results: List[SearchResults] = Field(default_factory=list)

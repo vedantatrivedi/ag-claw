@@ -24,7 +24,14 @@ wheels/
 venv/
 env/
 ENV/
-.venv
+.venv/
+
+# Environment & secrets
+.env
+.env.local
+.bb_cookies.json
+.bb_session
+.steel_session
 
 # IDE
 .vscode/
@@ -32,10 +39,6 @@ ENV/
 *.swp
 *.swo
 *~
-
-# Environment variables
-.env
-.env.local
 
 # Testing
 .pytest_cache/
@@ -51,12 +54,10 @@ dmypy.json
 # Ruff
 .ruff_cache/
 
-# Poetry
-poetry.lock
-
 # OS
 .DS_Store
 Thumbs.db
 
 # Logs
 *.log
+.playwright-mcp/

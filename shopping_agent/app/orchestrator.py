@@ -9,6 +9,7 @@ from openai import OpenAI
 
 from shopping_agent.app.config import Config
 from shopping_agent.app.workflows.planning_workflow import PlanningWorkflow
+from shopping_agent.app.workflows.guided_party_workflow import GuidedPartyWorkflow
 from shopping_agent.app.agents.planner import PlannerAgent
 from shopping_agent.app.agents.browser_search import BrowserSearchAgent
 
@@ -38,6 +39,7 @@ class ShoppingOrchestrator:
 
         # Initialize workflows
         self.planning_workflow = PlanningWorkflow(client=self.client)
+        self.guided_party_workflow = GuidedPartyWorkflow(client=self.client)
 
     def create_shopping_plan(
         self,
@@ -135,6 +137,26 @@ class ShoppingOrchestrator:
             result["search"] = search_result
 
         return result
+
+    def run_guided_party_flow(
+        self,
+        *,
+        user_request: str,
+        preferences_answers: dict,
+        budget_inr: float,
+        apply_postprocessing: bool = True,
+    ) -> Dict[str, Any]:
+        """Run the guided party flow with preauth gating."""
+        return self.guided_party_workflow.run(
+            user_request=user_request,
+            preferences_answers=preferences_answers,
+            budget_inr=budget_inr,
+            apply_postprocessing=apply_postprocessing,
+        )
+
+    def generate_guided_party_questions(self, user_request: str) -> list[str]:
+        """Return model-generated preference questions for the guided flow."""
+        return self.guided_party_workflow.generate_preference_questions(user_request)
 
     def get_agent_info(self) -> Dict[str, Any]:
         """

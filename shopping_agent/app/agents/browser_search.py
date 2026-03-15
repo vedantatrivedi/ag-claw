@@ -95,6 +95,8 @@ class BrowserSearchAgent:
             client: OpenAI client (creates new one if not provided)
         """
         if client is None:
+            # Validate config when creating client
+            Config.validate()
             client_kwargs = {"api_key": Config.OPENAI_API_KEY}
             if Config.OPENAI_BASE_URL:
                 client_kwargs["base_url"] = Config.OPENAI_BASE_URL

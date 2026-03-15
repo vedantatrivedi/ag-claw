@@ -1,0 +1,25 @@
+# Core dependencies
+openai>=1.54.0
+openai-agents
+pydantic>=2.9.0
+python-dotenv>=1.0.1
+rich>=13.9.0
+typer>=0.12.0
+langchain-openai>=0.2.0
+google-search-results>=2.4.2
+
+# Optional dependencies (browser automation)
+# browser-use>=0.1.0  # Uncomment if using browser features
+
+# API server
+fastapi>=0.100.0
+uvicorn>=0.24.0
+playwright>=1.40.0
+
+# Development dependencies (install separately if needed)
+# pytest>=8.3.0
+# pytest-asyncio>=0.24.0
+# pytest-cov
+# black>=24.10.0
+# mypy>=1.13.0
+# ruff>=0.7.0

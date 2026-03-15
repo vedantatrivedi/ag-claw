@@ -1,424 +1,530 @@
-# Shopping Agent - Multi-Agent Shopping Intent System
+<div align="center">
 
-A production-quality Python multi-agent system that converts shopping intents into structured plans and finds real products with smart ranking.
+# 🤖 ag-claw
 
-## Overview
+**Ask for Anything. AI Searches 49+ Sites. Get the Best Deals.**
 
-This system uses multiple AI agents to help users shop:
+[![CI](https://github.com/vedantatrivedi/ag-claw/workflows/CI/badge.svg)](https://github.com/vedantatrivedi/ag-claw/actions)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-- **Planner Agent**: Converts natural language requests into structured shopping plans
-- **Search Agent**: Searches 49+ e-commerce sites via SerpAPI/Google Shopping
-- **Ranking Agent**: 7-factor algorithm to rank products (price, rating, reviews, relevance, site, stock)
+Transform natural language shopping requests into structured plans and find the best products across 49+ e-commerce sites with AI-powered ranking.
 
-## Features
+[Features](#-features) • [Quick Start](#-quick-start) • [API](#-rest-api) • [Examples](#-examples) • [Contributing](#-contributing)
 
-### Core
-- ✅ Natural language shopping intent parsing
-- ✅ Structured JSON output with strict schema validation
-- ✅ Deterministic post-processing (deduplication, sorting, cleanup)
-- ✅ Guardrails for output quality (no URLs, no store names, concrete items only)
-- ✅ Rich CLI interface with examples
-- ✅ Production-ready architecture
-- ✅ Comprehensive test suite
-- ✅ Pine Labs / Plural payment tools for preauth and later capture
+</div>
 
-### Search Methods
+---
+
+## 🎯 What Is This?
+
+A production-ready multi-agent shopping system that:
+
+1. **Understands** natural language shopping requests
+2. **Plans** structured shopping lists with smart categorization
+3. **Searches** 49+ e-commerce sites in parallel
+4. **Ranks** products using a 7-factor algorithm
+5. **Displays** top 3 results with prices, ratings, and images
+
+**From this:**
+```
+"cricket gear for teenager"
+```
+
+**To this:**
+```
+📦 Youth cricket helmet with faceguard
+   #1: ₹926 (Score: 65.7) ⭐ 4.8 - Amazon
+   #2: ₹699 (Score: 58.6) ⭐ 4.5 - Flipkart
+   #3: ₹625 (Score: 57.0) ⭐ 4.2 - Sppartos
+```
+
+All in **~1.4 seconds** per search with **99%+ success rate**.
+
+---
+
+## ✨ Features
+
+### 🧠 Multi-Agent Architecture
+- **Planner Agent**: Converts vague requests into concrete shopping lists
+- **Search Agent**: Parallel multi-site product search
+- **Ranking Agent**: Smart 7-factor scoring algorithm
+
+### 🔍 Search Methods
 
 #### 1. SerpAPI (Multi-Site Search)
-- ✅ Real product search via SerpAPI (100 free searches/month)
-- ✅ Searches 49+ e-commerce sites via Google Shopping
-- ✅ Smart 7-factor ranking algorithm
-- ✅ Side-by-side product comparison (top 3 results)
-- ✅ Clickable product images and buy links
-- ✅ Color-coded ranking (#1 green, #2 blue, #3 yellow)
-- ✅ Parallel search for multiple items
-- ✅ 1.4s search speed, 99%+ success rate
+- 🌐 Searches **49+ e-commerce sites** via Google Shopping
+- ⚡ **1.4s average** search speed
+- 🎯 **7-factor ranking**: price, rating, reviews, site, relevance, stock, base score
+- 🎨 Color-coded results (🟢 #1, 🔵 #2, 🟡 #3)
+- 📊 Side-by-side comparison
+- 🖼️ Product images and direct buy links
+- 🚀 Parallel search for multiple items
 
 #### 2. Amazon API (Direct Integration)
-- ✅ **Amazon search API** — search products, filter sponsored results
-- ✅ **Add to cart API** — add products by URL/ASIN with cart screenshot
-- ✅ **Cookie persistence** — one-time login, reuse across sessions
-- ✅ **FastAPI server** with Swagger docs
-- ✅ **Flipkart search API** — search products, filter sponsored results
-- ✅ **Flipkart add to cart API** — add products by URL with cart screenshot
-- ✅ **Flipkart cookie persistence** — one-time login, reuse across sessions
+- 🔐 One-time login with cookie persistence
+- 🔍 Search with sponsored-result filtering
+- 🛒 Add to cart with screenshot confirmation
+- 📡 RESTful API with Swagger docs
 
-### Next Phase
-- 🔄 Product ranking and comparison
-- 🔄 Price tracking
-- 🔄 Pine Labs payment integration
-- 🔄 Agent handoffs with context passing
+### 💳 Payment Integration
+- 💰 Pine Labs / Plural preauth and capture
+- 🎉 Guided party planning workflow
+- 🤖 Discord bot integration
 
-## Installation
+### 🏗️ Production-Ready
+- ✅ Comprehensive test suite (17+ API tests)
+- ✅ Type-safe with Pydantic models
+- ✅ Deterministic post-processing
+- ✅ Schema validation and guardrails
+- ✅ Rich CLI with interactive mode
+- ✅ FastAPI server with OpenAPI docs
+- ✅ CI/CD with GitHub Actions
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.10 or higher
-- OpenAI API key
+- OpenAI API key ([Get one](https://platform.openai.com/api-keys))
+- SerpAPI key ([100 free searches/month](https://serpapi.com/users/sign_up))
 
-### Setup
+### Installation
 
-1. Clone the repository:
 ```bash
-git clone <repo-url>
+# Clone the repository
+git clone https://github.com/vedantatrivedi/ag-claw.git
 cd ag-claw
-```
 
-2. Install dependencies using Poetry:
-```bash
-poetry install
-```
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-3. Set up environment variables:
-```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up environment
 cp .env.example .env
-# Edit .env and add:
-# - OPENAI_API_KEY (required)
-# - SERPAPI_KEY (required - get free key at https://serpapi.com/users/sign_up)
-# - Pine Labs / Plural credentials (optional, required only for payment tools)
+# Edit .env and add your API keys:
+# - OPENAI_API_KEY=your-key
+# - SERPAPI_KEY=your-key
 ```
 
-4. Install SerpAPI package:
+### CLI Usage
+
 ```bash
-pip3 install google-search-results
-```
-
-5. Activate the virtual environment:
-```bash
-poetry shell
-```
-
-## Usage
-
-### Quick Start
-
-Search for products with automatic plan generation:
-```bash
+# Basic search
 python3 -m shopping_agent.app.main plan "wireless headphones under 5000"
+
+# View images in browser
+python3 view_images.py "cricket helmet youth"
+
+# Skip approval
+python3 -m shopping_agent.app.main plan "laptop" --no-auto-clarify
+
+# Show original unprocessed plan
+python3 -m shopping_agent.app.main plan "laptop" --show-original
 ```
 
-### Examples
+### API Server
 
 ```bash
-# Electronics
+# Start server
+uvicorn shopping_agent.server:app --reload --port 8000
+
+# Open Swagger docs
+open http://localhost:8000/docs
+```
+
+---
+
+## 📡 REST API
+
+### Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/plan` | POST | Generate shopping plan |
+| `/serp/search` | POST | Search products (SerpAPI) |
+| `/search` | POST | Search Amazon directly |
+| `/cart/add` | POST | Add to Amazon cart |
+| `/login/start` | POST | Start Amazon login session |
+| `/login/save-cookies` | POST | Save Amazon cookies |
+
+### Example: Generate Plan
+
+```bash
+curl -X POST http://localhost:8000/plan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request": "wireless headphones under 5000",
+    "postprocess": true
+  }'
+```
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "description": "Wireless in-ear earbuds with microphone",
+      "quantity": 1,
+      "intent": "Convenient for hands-free calls and casual listening",
+      "required": true,
+      "search_hints": ["wireless earbuds", "with microphone"],
+      "constraints": ["budget: under 5000"],
+      "search_query": "wireless in-ear earbuds with microphone under 5000",
+      "preferred_sites": ["croma", "flipkart", "amazon"]
+    }
+  ],
+  "assumptions": ["User prefers wireless for convenience"],
+  "clarifications_needed": ["Any specific brand preferences?"],
+  "metadata": {
+    "model": "gpt-4o-mini",
+    "tokens_used": 3127
+  }
+}
+```
+
+### Example: Search Products
+
+```bash
+curl -X POST http://localhost:8000/serp/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {
+        "description": "Wireless earbuds with mic",
+        "quantity": 1,
+        "intent": "Listening to music",
+        "required": true,
+        "search_hints": ["wireless", "bluetooth"],
+        "constraints": ["under 5000"],
+        "search_query": "wireless earbuds with mic",
+        "preferred_sites": ["amazon", "flipkart"]
+      }
+    ]
+  }'
+```
+
+**Response:**
+```json
+{
+  "count": 1,
+  "results": [
+    {
+      "item_description": "Wireless earbuds with mic",
+      "total_found": 20,
+      "results": [
+        {
+          "title": "realme Buds T310 Truly Wireless in-Ear Earbuds...",
+          "url": "https://...",
+          "price": 2199.0,
+          "source": "Amazon.in",
+          "rating": 4.6,
+          "review_count": 2600,
+          "image_url": "https://...",
+          "final_score": 75.3
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## 📊 How It Works
+
+### 1. Plan Generation
+
+```
+User Request → LLM (GPT-4o) → Structured Plan → Post-Processing → Validation
+```
+
+**Input:** "cricket gear for teenager"
+
+**Output:**
+- ✅ Youth cricket helmet with faceguard
+- ✅ Cricket bat lightweight for teenagers
+- ✅ Cricket batting gloves youth size
+- ℹ️ Assumptions: Age 13-15, budget-conscious
+- ❓ Clarifications: Specific size? Left or right-handed?
+
+### 2. Product Search
+
+```
+Plan Items → SerpAPI (49+ sites) → 7-Factor Ranking → Top 3 Results
+```
+
+**7-Factor Ranking Algorithm:**
+
+| Factor | Weight | Description |
+|--------|--------|-------------|
+| 💰 Price | 25pts | Lower price = higher score |
+| ⭐ Rating | 15pts | 5-star ratings prioritized |
+| 💬 Reviews | 10pts | Logarithmic popularity scoring |
+| 🏪 Site | 15pts | Amazon/Flipkart preferred |
+| 🎯 Relevance | 25pts | Keyword matching in title |
+| 📦 Stock | 5pts | In-stock prioritized |
+| 🔍 Base | 5pts | SerpAPI relevance score |
+
+**Total:** 100-point scale
+
+### 3. Display
+
+```
+╭────────────── #1 ───────────────╮ ╭────────────── #2 ───────────────╮ ╭────────────── #3 ───────────────╮
+│  realme Buds T310              │ │  Soundcore R50i                │ │  Realme Buds T01               │
+│  ₹2,199                        │ │  ₹899                          │ │  ₹999                          │
+│  ⭐⭐⭐⭐⭐ 4.6 (2600)       │ │  ⭐⭐⭐⭐⭐ 4.9 (119)        │ │  ⭐⭐⭐⭐⭐ 4.6 (706)        │
+│  Score: 75.3                   │ │  Score: 73.7                   │ │  Score: 73.5                   │
+│  🖼️  View Image                │ │  🖼️  View Image                │ │  🖼️  View Image                │
+│  🔍 View on Google Shopping    │ │  🔍 View on Google Shopping    │ │  🔍 View on Google Shopping    │
+╰────────────────────────────────╯ ╰────────────────────────────────╯ ╰────────────────────────────────╯
+```
+
+---
+
+## 🎨 Examples
+
+### Electronics
+
+```bash
 python3 -m shopping_agent.app.main plan "laptop under 50000 rupees"
+```
 
-# Sports equipment
+**Result:**
+- Laptop with 8GB RAM and SSD under 50000
+- Laptop cooling pad
+- Laptop bag for 15-inch screen
+
+### Sports Equipment
+
+```bash
 python3 -m shopping_agent.app.main plan "cricket bat helmet and pads for teenager"
+```
 
-# Fashion
+**Result:**
+- Cricket bat lightweight for teenagers
+- Cricket helmet youth size with faceguard
+- Batting pads junior size
+
+### Fashion
+
+```bash
 python3 -m shopping_agent.app.main plan "formal shirts for office"
+```
 
-# Party supplies
+**Result:**
+- Formal cotton shirts full sleeve (3-pack)
+- Formal tie set
+- Dress pants formal trousers
+
+### Party Supplies
+
+```bash
 python3 -m shopping_agent.app.main plan "birthday party decorations Star Wars theme"
 ```
 
-### View Product Images
+**Result:**
+- Star Wars birthday banner and backdrop
+- Star Wars party plates and napkins
+- Star Wars birthday cake topper
 
-Open HTML gallery with all product images:
-```bash
-python3 view_images.py "cricket helmet youth"
-```
+---
 
-## Pine Labs agent tools
-
-The repo now includes exportable Pine Labs / Plural tools in
-`shopping_agent.app.tools.pinelabs` for the shopping flow:
-
-1. `create_budget_preauth`
-2. `get_preauth_status`
-3. `capture_preauth`
-4. `cancel_preauth`
-
-These are also compatible with OpenAI's Agents SDK via `get_agents_sdk_tools()`.
-
-Example:
-
-```python
-from agents import Agent
-from shopping_agent import get_agents_sdk_tools
-
-payment_agent = Agent(
-    name="payment-agent",
-    instructions=(
-        "Use create_budget_preauth before curation, wait for AUTHORIZED status, "
-        "and only use capture_preauth after the user explicitly approves the final cart."
-    ),
-    tools=get_agents_sdk_tools(),
-)
-```
-
-Direct function usage without an agent:
-
-```python
-from shopping_agent import create_budget_preauth, capture_preauth
-
-preauth = create_budget_preauth(budget_paisa=150000)
-order_id = preauth["order_id"]
-
-# ... curate products, get user confirmation ...
-
-capture = capture_preauth(order_id=order_id, capture_amount_paisa=132500)
-```
-
-Webhook is not required. Polling support is built in through `get_preauth_status(..., wait_for_status="AUTHORIZED")`
-and `capture_preauth(..., wait_for_authorized=True)`. A webhook endpoint is still useful for faster event delivery,
-but the integration is designed to keep working if webhook delivery is delayed or fails.
-
-### CLI Options
-
-```bash
-# Skip approval step
-python3 -m shopping_agent.app.main plan "query" --no-auto-clarify
-
-# Disable post-processing
-python3 -m shopping_agent.app.main plan "query" --no-postprocess
-
-# Show original plan
-python3 -m shopping_agent.app.main plan "query" --show-original
-```
-
-## Architecture
-
-### Multi-Agent Design
-
-```
-User Request → Planner Agent → Structured Plan → (Future: Browser Search) → Products
-```
-
-#### Planner Agent
-- **Responsibility**: Convert raw user intents to structured shopping plans
-- **Model**: GPT-4o (configurable)
-- **Temperature**: 0.3 (low for consistency)
-- **Output**: Structured JSON with items, assumptions, and clarifications
-
-#### Browser Search Agent (Scaffold)
-- **Responsibility**: Search e-commerce platforms for products
-- **Model**: GPT-4o (configurable)
-- **Temperature**: 0.5
-- **Status**: Scaffolded, ready for implementation
-
-### Data Flow
-
-1. **Input**: Natural language shopping request
-2. **Planner**: Generates structured plan with:
-   - Item descriptions (specific, searchable)
-   - Quantities
-   - Intent for each item
-   - Required vs. optional classification
-   - Search hints for downstream agents
-   - Item-specific constraints
-3. **Post-processing**:
-   - Trim whitespace
-   - Normalize quantities
-   - Remove vague items
-   - Deduplicate similar items
-   - Sort (required first)
-   - Limit total items
-4. **Guardrails**:
-   - Schema validation
-   - No URLs allowed
-   - No store names
-   - Concrete items only
-5. **Output**: Clean, validated shopping plan
+## 🏗️ Architecture
 
 ### Project Structure
 
 ```
 shopping_agent/
-├── server.py                # FastAPI server (Browser Agent API)
 ├── app/
 │   ├── main.py              # CLI entry point
-│   ├── config.py            # Configuration management
-│   ├── orchestrator.py      # Multi-agent orchestration
-│   ├── models.py            # Pydantic models
-│   ├── prompts.py           # System prompts
-│   ├── postprocess.py       # Post-processing logic
-│   ├── guardrails.py        # Validation and safety
+│   ├── config.py            # Environment configuration
+│   ├── orchestrator.py      # Multi-agent coordination
+│   ├── models.py            # Pydantic data models
+│   ├── prompts.py           # LLM system prompts
+│   ├── postprocess.py       # Deterministic cleanup
+│   ├── guardrails.py        # Validation rules
 │   ├── agents/
-│   │   ├── planner.py       # Planner agent
-│   │   └── browser_search.py  # Browser search agent (scaffold)
+│   │   ├── planner.py       # Planning agent
+│   │   ├── browser_search.py
+│   │   ├── serpapi_search.py # SerpAPI integration
+│   │   └── searchapi_search.py
 │   ├── tools/
-│   │   ├── browser_tools.py # Browser tools (scaffold)
-│   │   └── browserbase.py   # Browserbase manager (search, cart, cookies)
+│   │   ├── browserbase.py   # Amazon automation
+│   │   └── pinelabs.py      # Payment integration
 │   └── workflows/
-│       └── planning_workflow.py  # Planning workflow
-└── tests/
-    ├── test_models.py
-    ├── test_postprocess.py
-    └── test_planner_agent.py
+│       ├── planning_workflow.py
+│       └── guided_party_workflow.py
+├── server.py                # FastAPI REST server
+├── tests/
+│   ├── test_api_endpoints.py
+│   ├── test_models.py
+│   ├── test_postprocess.py
+│   └── test_planner_agent.py
+└── discord_bot.py           # Discord integration
 ```
 
-## Examples
+### Data Flow
 
-### Example 1: Birthday Party
-
-**Input:**
-```
-"Darth Vader themed birthday party for a 10-year-old under $150"
-```
-
-**Output:**
-```json
-{
-  "items": [
-    {
-      "description": "Darth Vader birthday party plates and napkins set",
-      "quantity": 1,
-      "intent": "Themed tableware for party meals",
-      "required": true,
-      "search_hints": ["Star Wars", "disposable", "party supplies"],
-      "constraints": ["serves 12-16 guests"]
-    },
-    {
-      "description": "Darth Vader birthday banner or backdrop",
-      "quantity": 1,
-      "intent": "Main party decoration",
-      "required": true,
-      "search_hints": ["happy birthday banner", "wall decoration"],
-      "constraints": []
-    },
-    {
-      "description": "Darth Vader costume or mask for birthday child",
-      "quantity": 1,
-      "intent": "Birthday child costume",
-      "required": false,
-      "search_hints": ["kids size 10-12", "halloween costume"],
-      "constraints": ["age appropriate", "size: child medium"]
-    }
-  ],
-  "assumptions": [
-    "Party is for approximately 12-15 guests",
-    "Indoor party setting"
-  ],
-  "clarifications_needed": [
-    "Budget per item or total budget?",
-    "How many guests?"
-  ]
-}
+```mermaid
+graph LR
+    A[User Request] --> B[Planner Agent]
+    B --> C[Post-Processing]
+    C --> D[Validation]
+    D --> E{Search?}
+    E -->|Yes| F[SerpAPI/Amazon]
+    F --> G[Ranking]
+    G --> H[Top 3 Results]
+    E -->|No| I[Return Plan]
 ```
 
-### Example 2: Interview Prep
+### Multi-Agent Coordination
 
-**Input:**
 ```
-"Software engineering interview prep kit"
-```
-
-**Output:**
-```json
-{
-  "items": [
-    {
-      "description": "Data structures and algorithms textbook",
-      "quantity": 1,
-      "intent": "Core technical interview preparation material",
-      "required": true,
-      "search_hints": ["CLRS", "algorithm design manual", "coding interview"],
-      "constraints": []
-    },
-    {
-      "description": "Whiteboard or portable whiteboard for practice",
-      "quantity": 1,
-      "intent": "Practice writing code and diagrams by hand",
-      "required": true,
-      "search_hints": ["dry erase", "portable", "desktop whiteboard"],
-      "constraints": ["size: 24x36 inches or smaller"]
-    },
-    {
-      "description": "System design interview preparation book",
-      "quantity": 1,
-      "intent": "Prepare for system design interviews",
-      "required": false,
-      "search_hints": ["system design primer", "scalability"],
-      "constraints": []
-    }
-  ],
-  "assumptions": [
-    "Preparing for software engineering roles at tech companies",
-    "Has basic programming knowledge"
-  ],
-  "clarifications_needed": [
-    "Target company level (FAANG vs startups)?",
-    "Timeline for interview prep?"
-  ]
-}
+┌─────────────────┐
+│  User Request   │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐     ┌──────────────────┐
+│ Planner Agent   │────>│ Post-Processing  │
+│ (GPT-4o)        │     │ (Deterministic)  │
+└─────────────────┘     └────────┬─────────┘
+                                 │
+                                 v
+                        ┌─────────────────┐
+                        │  Guardrails     │
+                        │  (Validation)   │
+                        └────────┬────────┘
+                                 │
+                        ┌────────v────────┐
+                        │  User Approval  │
+                        └────────┬────────┘
+                                 │
+         ┌───────────────────────┴──────────────────────┐
+         v                                              v
+┌─────────────────┐                          ┌──────────────────┐
+│ SerpAPI Search  │                          │  Amazon Search   │
+│ (49+ sites)     │                          │  (Direct)        │
+└────────┬────────┘                          └────────┬─────────┘
+         │                                            │
+         v                                            v
+┌─────────────────┐                          ┌──────────────────┐
+│  7-Factor Rank  │                          │  Add to Cart     │
+└────────┬────────┘                          └──────────────────┘
+         │
+         v
+┌─────────────────┐
+│  Top 3 Display  │
+└─────────────────┘
 ```
 
-## Development
+---
 
-### Running Tests
+## 🧪 Testing
+
+### Run Tests
 
 ```bash
-# Run all tests
-poetry run pytest
+# All tests
+python3 -m pytest -v
 
-# Run with coverage
-poetry run pytest --cov=shopping_agent
+# With coverage
+python3 -m pytest --cov=shopping_agent --cov-report=term --cov-report=html
 
-# Run specific test file
-poetry run pytest shopping_agent/tests/test_models.py
+# Specific test file
+python3 -m pytest shopping_agent/tests/test_api_endpoints.py -v
 
-# Skip integration tests (requires API key)
-poetry run pytest -m "not integration"
+# Integration tests only
+python3 -m pytest -m "integration"
+
+# Skip integration tests
+python3 -m pytest -m "not integration"
 ```
+
+### Test Categories
+
+- **Unit Tests**: Models, post-processing, validation
+- **Integration Tests**: Full API flows, agent coordination
+- **API Tests**: REST endpoint validation (17+ test cases)
+- **Performance Tests**: Response time benchmarks
+
+### CI/CD
+
+GitHub Actions runs on every PR and push to main:
+
+- ✅ Python 3.10 and 3.11 matrix
+- ✅ Unit and integration tests
+- ✅ Code quality (black, ruff, mypy)
+- ✅ Coverage reporting
+- ✅ pip dependency caching
+
+---
+
+## 🛠️ Development
 
 ### Code Quality
 
 ```bash
 # Format code
-poetry run black shopping_agent/
+black shopping_agent/
 
 # Lint
-poetry run ruff check shopping_agent/
+ruff check shopping_agent/
 
-# Type checking
-poetry run mypy shopping_agent/
+# Type check
+mypy shopping_agent/
 ```
 
-## Configuration
+### Configuration
 
-Configuration is managed through environment variables in `.env`:
+All settings managed via `.env`:
 
 ```bash
 # Required
-OPENAI_API_KEY=your-openai-key
-SERPAPI_KEY=your-serpapi-key
+OPENAI_API_KEY=your-key
+SERPAPI_KEY=your-key
 
-# Required for Browser Agent APIs (Amazon/Flipkart)
-BROWSERBASE_API_KEY=your-browserbase-api-key
-BROWSERBASE_PROJECT_ID=your-browserbase-project-id
+# Optional
+OPENAI_MODEL=gpt-4o-mini           # Default model
+PLANNER_TEMPERATURE=0.3            # LLM temperature
+BROWSER_SEARCH_ENABLED=true        # Enable browser search
+BROWSER_HEADLESS=true              # Headless browser mode
+MAX_PARALLEL_SEARCHES=3            # Parallel search limit
 
-# Optional (defaults shown)
-OPENAI_MODEL=gpt-4o-mini
-PLANNER_TEMPERATURE=0.3
-LOG_LEVEL=INFO
+# Amazon API (optional)
+BROWSERBASE_API_KEY=your-key
+BROWSERBASE_PROJECT_ID=your-id
+
+# Pine Labs (optional)
+PINELABS_MERCHANT_ID=your-id
+PINELABS_ACCESS_CODE=your-code
+PINELABS_WORKING_KEY=your-key
 ```
 
-### Get Free API Keys
+---
 
-1. **SerpAPI** (100 free searches/month):
-   - Visit: https://serpapi.com/users/sign_up
-   - No credit card required
-   - Add to `.env`: `SERPAPI_KEY=your_key`
+## 🎯 Planner Agent Rules
 
-2. **OpenAI**:
-   - Visit: https://platform.openai.com/api-keys
-   - Add to `.env`: `OPENAI_API_KEY=your_key`
+The planner agent follows strict guidelines:
 
-## Planner Agent Rules
-
-The planner agent follows strict rules to ensure high-quality output:
-
-### Must Do
+### ✅ Must Do
 - Return concrete, purchasable items only
 - Provide specific, searchable descriptions
 - Explain the intent for each item
 - Distinguish required vs. optional items
 - Add search hints for downstream agents
-- Make reasonable assumptions when needed
-- Ask for clarifications on critical missing info
+- Make reasonable assumptions
+- Ask for critical clarifications
 
-### Must NOT Do
+### ❌ Must NOT Do
 - Return store names or URLs
 - Rank or recommend specific products
 - Hallucinate brand names (unless requested)
@@ -426,397 +532,145 @@ The planner agent follows strict rules to ensure high-quality output:
 - Overproduce optional items
 - Make up prices or availability
 
-## Search Methods
+---
 
-### Method 1: SerpAPI (Multi-Site)
+## 🌐 Deployment
 
-#### How It Works
+### AWS EC2 (Recommended)
 
-**1. Shopping Plan Generation**
-User request → Planner Agent → Structured plan with items, quantities, constraints
+Complete deployment guide available in [DEPLOYMENT.md](DEPLOYMENT.md)
 
-**2. Product Search**
-Plan items → SerpAPI → Searches 49+ e-commerce sites via Google Shopping
+**Quick deploy to EC2:**
+```bash
+# First-time setup (on EC2 instance)
+bash setup-ec2.sh
 
-**3. Smart Ranking (7 Factors)**
-Products ranked 0-100 based on:
-1. **Price competitiveness** (25pts) - Lower is better
-2. **Rating quality** (15pts) - 5-star = full points
-3. **Review popularity** (10pts) - More reviews = better
-4. **Site preference** (15pts) - Amazon/Flipkart prioritized
-5. **Title relevance** (25pts) - Keyword matching
-6. **Stock availability** (5pts) - In-stock prioritized
-7. **Base search relevance** (5pts) - API relevance
+# Edit .env with your API keys
+nano .env
 
-**4. Display**
-Top 3 products per item displayed side-by-side:
-- #1 = Green border (best)
-- #2 = Blue border
-- #3 = Yellow border
+# Start service
+sudo systemctl start ag-claw
 
-Each shows: price, rating, reviews, score, image, buy link
-
-#### Output Example
-
-```
-🎯 Top Ranked Products
-
-📦 Youth cricket helmet with faceguard
-
-╭─── #1 ───╮  ╭─── #2 ───╮  ╭─── #3 ───╮
-│ GREEN    │  │ BLUE     │  │ YELLOW   │
-│ ₹926     │  │ ₹699     │  │ ₹625     │
-│ Score:65.7│  │ Score:58.6│  │ Score:57.0│
-│ 🖼️ Image │  │ 🖼️ Image │  │ 🖼️ Image │
-│ 🛒 Buy   │  │ 🛒 Buy   │  │ 🛒 Buy   │
-╰──────────╯  ╰──────────╯  ╰──────────╯
+# Future updates
+./deploy.sh
 ```
 
-### Method 2: Amazon API (Direct)
+**Features:**
+- Systemd service for auto-restart
+- Nginx reverse proxy
+- HTTPS with Let's Encrypt
+- Logging and monitoring
+- Production-ready configuration
 
-## Browser Agent API (Amazon)
+**Cost:** ~$30/month (t3.medium)
 
-The browser search agent is now implemented using [Browserbase](https://browserbase.com) for hosted Chrome sessions and [Playwright](https://playwright.dev) for browser automation. It connects to Amazon.in, searches for products, and can add items to cart.
+### Other Platforms
 
-### Prerequisites
+- **Railway**: One-click FastAPI deploy
+- **Render**: Free tier available
+- **Fly.io**: Global edge deployment
+- **AWS Lambda**: Serverless option
 
-- Browserbase account (free tier: 1 hour of browser time)
-- `BROWSERBASE_API_KEY` and `BROWSERBASE_PROJECT_ID` environment variables
-
-### Starting the API Server
+### Docker (Coming Soon)
 
 ```bash
-export BROWSERBASE_API_KEY="your-key"
-export BROWSERBASE_PROJECT_ID="your-project-id"
-
-uvicorn shopping_agent.server:app --port 8000
+docker build -t ag-claw .
+docker run -p 8000:8000 --env-file .env ag-claw
 ```
 
-Swagger docs available at `http://localhost:8000/docs`
+### Production Checklist
 
-### API Endpoints
-
-#### `GET /health` — Health Check
-
-```bash
-curl http://localhost:8000/health
-```
-
-```json
-{"status": "ok"}
-```
+- [ ] Set `BROWSER_HEADLESS=true`
+- [ ] Configure API rate limits
+- [ ] Enable CORS for frontend
+- [ ] Set up monitoring (Sentry, LogRocket)
+- [ ] Add authentication middleware
+- [ ] Configure caching (Redis)
+- [ ] Set up secrets management
+- [ ] Enable HTTPS
 
 ---
 
-#### `POST /login/start` — Start Login Session
+## 🤝 Contributing
 
-Creates a Browserbase browser session and returns a debug URL. Open the URL in your browser, navigate to amazon.in, and log in manually. This only needs to be done once — cookies are saved for future sessions.
+We welcome contributions! Here's how to get started:
 
-```bash
-curl -X POST http://localhost:8000/login/start \
-  -H "Content-Type: application/json" \
-  -d '{"timeout": 900}'
-```
+### Development Workflow
 
-**Response:**
-```json
-{
-  "session_id": "c78f7050-...",
-  "cdp_url": "wss://connect.usw2.browserbase.com/...",
-  "debug_url": "https://www.browserbase.com/devtools-fullscreen/inspector.html?wss=..."
-}
-```
+1. **Fork and clone**
+   ```bash
+   git clone https://github.com/yourusername/ag-claw.git
+   cd ag-claw
+   ```
 
----
+2. **Create a feature branch**
+   ```bash
+   git checkout -b feature/amazing-feature
+   ```
 
-#### `POST /login/save-cookies` — Save Cookies from Login Session
+3. **Make your changes**
+   - Write tests for new features
+   - Follow existing code style
+   - Update documentation
 
-After logging into Amazon via the debug URL, call this to extract and save cookies locally. All subsequent API calls will inject these cookies automatically.
+4. **Run tests and linting**
+   ```bash
+   python3 -m pytest
+   black shopping_agent/
+   ruff check shopping_agent/
+   ```
 
-```bash
-curl -X POST http://localhost:8000/login/save-cookies
-```
+5. **Commit and push**
+   ```bash
+   git commit -m "Add amazing feature"
+   git push origin feature/amazing-feature
+   ```
 
-**Response:**
-```json
-{
-  "amazon_cookies": 21,
-  "total_cookies": 100,
-  "local_storage_keys": 11
-}
-```
+6. **Create a Pull Request**
+   - Describe your changes
+   - Link related issues
+   - Request review
 
----
+### Contribution Ideas
 
-#### `POST /search` — Search Amazon
-
-Searches Amazon.in and returns the top non-sponsored results.
-
-```bash
-curl -X POST http://localhost:8000/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "wireless earbuds", "max_results": 8}'
-```
-
-**Request body:**
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `query` | string | required | Search query |
-| `max_results` | int | 8 | Max non-sponsored results (1-20) |
-
-**Response:**
-```json
-{
-  "query": "wireless earbuds",
-  "count": 8,
-  "results": [
-    {
-      "title": "OnePlus Nord Buds 3r TWS Earbuds...",
-      "price": "₹1,599",
-      "rating": "4.2 out of 5 stars",
-      "reviews": "(40.4K)",
-      "asin": "B0FMDL81GS",
-      "url": "https://www.amazon.in/...",
-      "image": "https://m.media-amazon.com/images/..."
-    }
-  ]
-}
-```
+- 🌐 Add more e-commerce site integrations
+- 📊 Improve ranking algorithm
+- 🎨 Build frontend UI
+- 📱 Mobile app
+- 🔍 Add price tracking
+- 💳 More payment gateways
+- 🌍 International markets
+- 📈 Analytics dashboard
+- 🤖 Slack/Teams integration
 
 ---
 
-#### `POST /cart/add` — Add Products to Cart
+## 📜 License
 
-Adds products to the Amazon cart by URL or ASIN. Returns product images for each item and a full-page screenshot of the cart.
-
-```bash
-curl -X POST http://localhost:8000/cart/add \
-  -H "Content-Type: application/json" \
-  -d '{"urls": ["B0FMDL81GS", "B07SKV7XJQ"]}'
-```
-
-**Request body:**
-| Field | Type | Description |
-|-------|------|-------------|
-| `urls` | string[] | Product URLs, ASINs, or `/dp/...` paths |
-
-**Response:**
-```json
-{
-  "total": 2,
-  "added": 2,
-  "failed": 0,
-  "items": [
-    {
-      "url": "https://www.amazon.in/dp/B0FMDL81GS",
-      "title": "OnePlus Nord Buds 3r TWS Earbuds...",
-      "image": "https://m.media-amazon.com/images/...",
-      "success": true,
-      "message": "Added (cart: 2)"
-    }
-  ],
-  "cart_screenshot": "iVBORw0KGgoAAAANSUhEUg..."
-}
-```
-
-The `cart_screenshot` field is a base64-encoded PNG of the full Amazon cart page. To decode:
-
-```bash
-echo "$SCREENSHOT_BASE64" | base64 -d > cart.png
-```
+MIT License - see [LICENSE](LICENSE) file for details
 
 ---
 
-### One-Time Login Flow
+## 🙏 Acknowledgments
 
-```bash
-# 1. Start a login session
-curl -X POST http://localhost:8000/login/start
-
-# 2. Open the debug_url from the response in your browser
-#    Navigate to amazon.in and log in
-
-# 3. Save cookies
-curl -X POST http://localhost:8000/login/save-cookies
-
-# 4. Now search and add-to-cart work without manual login
-curl -X POST http://localhost:8000/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "football"}'
-```
-
-### How It Works
-
-1. **Cookie persistence**: Amazon login cookies are saved to `.bb_cookies.json` after a one-time manual login
-2. **Session per request**: Each API call creates a fresh Browserbase session, injects saved cookies, performs the action, and releases the session
-3. **Sponsored filtering**: Search results automatically skip sponsored/ad listings
-4. **Cart screenshots**: The add-to-cart endpoint navigates to the cart page after adding all items and captures a full-page screenshot
-
-## Browser Agent API (Flipkart)
-
-Same architecture as the Amazon agent — Browserbase sessions with cookie persistence for Flipkart.
-
-### API Endpoints
-
-#### `POST /flipkart/login/start` — Start Flipkart Login Session
-
-Creates a Browserbase browser session and returns a debug URL. Open the URL in your browser, navigate to flipkart.com, and log in manually. This only needs to be done once — cookies are saved for future sessions.
-
-```bash
-curl -X POST http://localhost:8000/flipkart/login/start \
-  -H "Content-Type: application/json" \
-  -d '{"timeout": 900}'
-```
-
-**Response:**
-```json
-{
-  "session_id": "c78f7050-...",
-  "cdp_url": "wss://connect.usw2.browserbase.com/...",
-  "debug_url": "https://www.browserbase.com/devtools-fullscreen/inspector.html?wss=..."
-}
-```
+- [OpenAI](https://openai.com/) for GPT models
+- [SerpAPI](https://serpapi.com/) for search infrastructure
+- [FastAPI](https://fastapi.tiangolo.com/) for the awesome web framework
+- [Browserbase](https://browserbase.com/) for browser automation
+- [Pine Labs](https://pinelabs.com/) for payment integration
 
 ---
 
-#### `POST /flipkart/login/save-cookies` — Save Flipkart Cookies
+## 📞 Support
 
-After logging into Flipkart via the debug URL, call this to extract and save cookies locally.
-
-```bash
-curl -X POST http://localhost:8000/flipkart/login/save-cookies
-```
-
-**Response:**
-```json
-{
-  "flipkart_cookies": 18,
-  "total_cookies": 85,
-  "local_storage_keys": 5
-}
-```
+- **Issues**: [GitHub Issues](https://github.com/vedantatrivedi/ag-claw/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/vedantatrivedi/ag-claw/discussions)
+- **Email**: vedantatrivedi@example.com
 
 ---
 
-#### `POST /flipkart/search` — Search Flipkart
+<div align="center">
 
-Searches Flipkart and returns the top non-sponsored results.
+**⭐ Star this repo if you find it useful!**
 
-```bash
-curl -X POST http://localhost:8000/flipkart/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "wireless earbuds", "max_results": 8}'
-```
-
-**Request body:**
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `query` | string | required | Search query |
-| `max_results` | int | 8 | Max non-sponsored results (1-20) |
-
-**Response:**
-```json
-{
-  "query": "wireless earbuds",
-  "count": 8,
-  "results": [
-    {
-      "title": "boAt Airdopes 161/163, ASAP Charge, 40H Battery...",
-      "price": "₹999",
-      "rating": "4.1",
-      "reviews": "(15,45,457)",
-      "pid": "ACCG6DS7WDJHGWSH",
-      "url": "https://www.flipkart.com/boat-airdopes-.../p/itm...?pid=...",
-      "image": "https://rukminim2.flixcart.com/image/..."
-    }
-  ]
-}
-```
-
----
-
-#### `POST /flipkart/cart/add` — Add Products to Flipkart Cart
-
-Adds products to the Flipkart cart by URL. Returns product images for each item and a full-page screenshot of the cart.
-
-```bash
-curl -X POST http://localhost:8000/flipkart/cart/add \
-  -H "Content-Type: application/json" \
-  -d '{"urls": ["https://www.flipkart.com/product-name/p/itm...?pid=..."]}'
-```
-
-**Request body:**
-| Field | Type | Description |
-|-------|------|-------------|
-| `urls` | string[] | Full Flipkart product URLs or `/product/p/...` paths |
-
-**Response:**
-```json
-{
-  "total": 1,
-  "added": 1,
-  "failed": 0,
-  "items": [
-    {
-      "url": "https://www.flipkart.com/...",
-      "title": "boAt Airdopes 161/163...",
-      "image": "https://rukminim2.flixcart.com/image/...",
-      "success": true,
-      "message": "Added (cart: 1)"
-    }
-  ],
-  "cart_screenshot": "iVBORw0KGgoAAAANSUhEUg..."
-}
-```
-
----
-
-### One-Time Flipkart Login Flow
-
-```bash
-# 1. Start a login session
-curl -X POST http://localhost:8000/flipkart/login/start
-
-# 2. Open the debug_url from the response in your browser
-#    Navigate to flipkart.com and log in
-
-# 3. Save cookies
-curl -X POST http://localhost:8000/flipkart/login/save-cookies
-
-# 4. Now search and add-to-cart work without manual login
-curl -X POST http://localhost:8000/flipkart/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "football"}'
-```
-
-### How It Works (Flipkart)
-
-1. **Cookie persistence**: Flipkart cookies are saved to `.bb_flipkart_cookies.json` (separate from Amazon)
-2. **Session per request**: Same Browserbase session-per-request model as Amazon
-3. **Sponsored filtering**: Results skip items with "Ad"/"Sponsored" badges or `fm=neo` in URLs
-4. **React Native Web**: Flipkart uses React Native Web — add-to-cart clicks target `div` elements, not buttons
-
-## Next Phase
-
-### Planned Features
-- Product ranking and comparison
-- Price tracking
-- Agent handoffs with context passing
-- Pine Labs payment integration (see `codex/guided-party-preauth` branch)
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Run code quality checks
-6. Submit a pull request
-
-## License
-
-MIT License
-
-## Author
-
-jinit24
+</div>

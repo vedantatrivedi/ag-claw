@@ -27,6 +27,9 @@ class ShoppingOrchestrator:
 
     def __init__(self):
         """Initialize the orchestrator and all agents."""
+        # Validate config before creating client
+        Config.validate()
+
         # Create shared OpenAI client
         client_kwargs = {"api_key": Config.OPENAI_API_KEY}
         if Config.OPENAI_BASE_URL:
